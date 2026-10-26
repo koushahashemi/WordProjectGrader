@@ -7,6 +7,7 @@ import sys
 import threading
 import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
+from tkinter import font as tkfont
 from tkinter.scrolledtext import ScrolledText
 from autograder import VERSION, grade, grade_paths, csv_report, detail_text
 from grader import BASE, CRITERIA
@@ -23,26 +24,30 @@ class GraderApp:
         root.title(f'Bears Assignment Grader {VERSION}')
         root.geometry('1280x840'); root.minsize(900,650)
         root.configure(background='#FAF3E0')
+        family='Segoe UI' if 'Segoe UI' in tkfont.families(root) else 'DejaVu Sans'
+        for name in ('TkDefaultFont','TkTextFont','TkMenuFont','TkHeadingFont'):
+            tkfont.nametofont(name).configure(family=family,size=10)
         style=ttk.Style(root)
         if 'vista' in style.theme_names(): style.theme_use('vista')
         style.configure('Treeview',rowheight=27)
-        style.configure('Title.TLabel',font=('Segoe UI',21,'bold'),foreground='#00796B')
-        style.configure('Sub.TLabel',font=('Segoe UI',10))
+        style.configure('.',font=(family,10))
+        style.configure('Title.TLabel',font=(family,21,'bold'),foreground='#00796B')
+        style.configure('Sub.TLabel',font=(family,10))
         outer=ttk.Frame(root,padding=16); outer.pack(fill='both',expand=True)
         ttk.Label(outer,text='Bears Assignment Grader',style='Title.TLabel').pack(anchor='w')
-        ttk.Label(outer,text='Automatic scoring • Word Project 2026 • 12 criteria / 60 points',style='Sub.TLabel').pack(anchor='w',pady=(2,10))
+        ttk.Label(outer,text='Automatic scoring | Word Project 2026 | 12 criteria / 60 points',style='Sub.TLabel').pack(anchor='w',pady=(2,10))
         tools=ttk.Frame(outer);tools.pack(fill='x')
-        self.add=ttk.Button(tools,text='Add Word files…',command=self.choose_files);self.add.pack(side='left',padx=(0,6))
-        self.folder=ttk.Button(tools,text='Add folder…',command=self.choose_folder);self.folder.pack(side='left',padx=6)
+        self.add=ttk.Button(tools,text='Add Word files...',command=self.choose_files);self.add.pack(side='left',padx=(0,6))
+        self.folder=ttk.Button(tools,text='Add folder...',command=self.choose_folder);self.folder.pack(side='left',padx=6)
         self.clear=ttk.Button(tools,text='Clear batch',command=self.clear_batch);self.clear.pack(side='left',padx=6)
-        ttk.Button(tools,text='Export grades CSV…',command=self.export_csv).pack(side='right',padx=6)
-        ttk.Button(tools,text='Save full report…',command=self.export_report).pack(side='right',padx=6)
+        ttk.Button(tools,text='Export grades CSV...',command=self.export_csv).pack(side='right',padx=6)
+        ttk.Button(tools,text='Save full report...',command=self.export_report).pack(side='right',padx=6)
         self.progress=ttk.Progressbar(outer,mode='determinate');self.progress.pack(fill='x',pady=(10,4))
         self.status=tk.StringVar(value='Select multiple .docx files or a folder. Grading runs automatically; original documents are never changed.')
         ttk.Label(outer,textvariable=self.status,wraplength=1150).pack(anchor='w',pady=(0,8))
         panes=ttk.Panedwindow(outer,orient='vertical');panes.pack(fill='both',expand=True)
         batch=ttk.Frame(panes);panes.add(batch,weight=2)
-        columns=['filename',*SHORT,'total','status']
+        columns=['filename','total','status',*SHORT]
         self.batch=ttk.Treeview(batch,columns=columns,show='headings',selectmode='browse',height=7)
         for col in columns:
             self.batch.heading(col,text='Submission' if col=='filename' else 'Total /60' if col=='total' else col.title())
@@ -57,7 +62,7 @@ class GraderApp:
         self.batch.bind('<<TreeviewSelect>>',self.select_submission)
         review=ttk.Frame(panes,padding=(0,12,0,0));panes.add(review,weight=3)
         self.selected=tk.StringVar(value='Select a submission to see its rubric scores and deduction details.')
-        ttk.Label(review,textvariable=self.selected,font=('Segoe UI',11,'bold')).pack(anchor='w')
+        ttk.Label(review,textvariable=self.selected,font=(family,11,'bold')).pack(anchor='w')
         ttk.Label(review,text='Select any criterion below. FAIL entries explain deductions; UNVERIFIED entries identify score limitations.',wraplength=1150).pack(anchor='w',pady=(4,8))
         split=ttk.Panedwindow(review,orient='horizontal');split.pack(fill='both',expand=True)
         rubric=ttk.Frame(split);split.add(rubric,weight=1)
@@ -67,7 +72,7 @@ class GraderApp:
         self.rubric.pack(fill='both',expand=True)
         self.rubric.tag_configure('deduction',foreground='#A12B1F')
         self.rubric.bind('<<TreeviewSelect>>',self.select_criterion)
-        self.details=ScrolledText(split,wrap='word',font=('Segoe UI',10),padx=12,pady=10,state='disabled')
+        self.details=ScrolledText(split,wrap='word',font=(family,10),padx=12,pady=10,state='disabled')
         split.add(self.details,weight=2)
         ttk.Label(outer,text='Estimated = XML cannot verify every qualitative/layout requirement. The app still assigns a score; no manual scoring step is required.',wraplength=1150).pack(anchor='w',pady=(10,0))
         root.after(100,self.poll)
@@ -91,7 +96,7 @@ class GraderApp:
         self.busy=True
         for button in (self.add,self.folder,self.clear):button.configure(state='disabled')
         self.progress.configure(maximum=len(paths),value=0)
-        self.status.set(f'Grading {len(paths)} document(s)…')
+        self.status.set(f'Grading {len(paths)} document(s)...')
         def worker():
             try:
                 for index,path in enumerate(paths):
@@ -106,9 +111,9 @@ class GraderApp:
     def add_result(self,result):
         idx=str(len(self.results));self.results.append(result)
         if 'error' in result:
-            values=[result['filename'],*['—']*12,'—','Error'];tags=('error',)
+            values=[result['filename'],'-','Error',*['-']*12];tags=('error',)
         else:
-            values=[result['filename'],*[r['score'] for r in result['criteria']],result['total'],'Estimated' if result['estimated'] else 'Scored'];tags=()
+            values=[result['filename'],result['total'],'Estimated' if result['estimated'] else 'Scored',*[r['score'] for r in result['criteria']]];tags=()
         self.batch.insert('','end',iid=idx,values=values,tags=tags)
         if not self.batch.selection():self.batch.selection_set(idx)
 
@@ -132,8 +137,8 @@ class GraderApp:
         if not chosen:return
         result=self.results[int(chosen[0])]
         if 'error' in result:
-            self.selected.set(result['filename']+' — unable to grade');self.show_text(result['error']);return
-        self.selected.set(f'{result["filename"]} — {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''))
+            self.selected.set(result['filename']+' - unable to grade');self.show_text(result['error']);return
+        self.selected.set(f'{result["filename"]} - {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''))
         for i,row in enumerate(result['criteria']):
             self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(c['passed'] is False for c in row['checks']),sum(c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
         self.show_text(detail_text(result))
