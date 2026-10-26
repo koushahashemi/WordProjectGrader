@@ -9,7 +9,7 @@ import re
 from lxml import etree as ET
 from grader import BASE, CRITERIA, NS, W, package, xml
 
-VERSION = '2.0.0'
+VERSION = '2.0.1'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -287,6 +287,10 @@ def grade(data, filename):
         for p in d.ps[start:cutoff]:
             if p is not titlefield['p'] and d.page_boundary_before(p): break
             titleps.append(p)
+    if not titlefield:
+        for p in d.ps[:cutoff]:
+            if titleps and d.page_boundary_before(p): break
+            titleps.append(p)
     nonempty=[p for p in titleps if text(p)]
     checks=[ck('Document Title field',titlefield is not None,'TITLE or DOCPROPERTY Title on first page',titlefield['code'] if titlefield else 'Missing')]
     if titlefield:
@@ -299,7 +303,7 @@ def grade(data, filename):
             checks.append(ck('Student information style',d.pstyle(p)==d.sid('Normal'),'Normal',d.pstyle(p),p))
     checks.append(ck('Blank lines between information',len(nonempty)>=4 and all(any(not text(q) for q in titleps[titleps.index(a)+1:titleps.index(b)]) for a,b in zip(nonempty[:3],nonempty[1:4])),'Blank paragraph between title/name/number/set',f'{sum(not text(p) for p in titleps)} blank paragraphs'))
     checks.append(ck('Title page is physically separate',None,'Only title and student information on rendered page 1','Word pagination is not evaluated by the XML engine.'))
-    s.row(CRITERIA[2],checks,0 if not titlefield and not nonempty else None)
+    s.row(CRITERIA[2],checks,(1 if nonempty and any(d.page_boundary_before(p) for p in d.ps[1:cutoff+1]) else 0) if not titlefield else None, 'Without the required document-title field, a recognizable cover receives 1; no cover receives 0.' if not titlefield else '')
 
     tocs=d.fields(r'^\s*TOC\b')
     figures_lists=[f for f in tocs if re.search(r'\\[ca]\s+"?Figure\b',f['code'],re.I)]
@@ -327,7 +331,26 @@ def grade(data, filename):
                 checks.append(ck('TOC title',bool(titles),'Contents or Table of Contents','Present' if titles else 'Missing'))
                 if titles: checks+=s.formatting(d.pstyle(titles[-1]),18,TEAL,titles[-1])
             checks.append(ck('Dedicated rendered pages',None,'No unrelated content on TOC/figure-list pages','XML does not reliably encode rendered pagination or identify the exact Word gallery preset.'))
-        s.row(criterion,checks,0 if not found else None)
+        fallback_score=None
+        if not found:
+            names=('list of figures',) if isfig else ('contents','table of contents')
+            titlep=next((p for p in d.ps if text(p).casefold() in names),None)
+            if titlep is not None:
+                after=d.ps[d.index[titlep]+1:]
+                entries=[]
+                for p in after:
+                    if text(p)=='Introduction to Bears' or (entries and d.page_boundary_before(p)): break
+                    if text(p): entries.append(p)
+                expected_entries=('Figure ' if isfig else 'Introduction to Bears')
+                plausible=[p for p in entries if (expected_entries in text(p) or re.search(r'[.\t ]\s*\d+$',text(p)))]
+                checks.append(ck('Manually created list content',bool(plausible),'Recognizable entries beneath list title',f'{len(plausible)} recognizable entries',titlep))
+                if plausible:
+                    good=all(all(c.passed for c in s.formatting(d.pstyle(p),11,GRAY,p)) for p in plausible)
+                    checks.append(ck('Manual entry formatting',good,'Segoe UI 11 pt gray','Matches' if good else 'Formatting differs'))
+                    fallback_score=3 if good else 1
+                else:fallback_score=1
+            else:fallback_score=0
+        s.row(criterion,checks,fallback_score,('Manual list: 3 if recognizable entries meet brand typography; 1 if a list title exists but entries/formatting are incomplete; 0 if absent. An automatic field is required for 5.' if not found else ''))
 
     seq=d.fields(r'^\s*SEQ\s+Figure\b')
     captions=s.formatting('Caption',10,GRAY,italic=True)

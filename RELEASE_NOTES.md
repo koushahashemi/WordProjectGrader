@@ -1,4 +1,4 @@
-## Bears Grader 2.0
+## Bears Grader 2.0.1
 
 - Native Windows desktop app: download BearsGrader.exe and double-click. No Python installation or browser required.
 - Automatic scores for all 12 assignment rubric criteria and a batch summary out of 60.
@@ -8,3 +8,5 @@
 - Assignment assets bundled inside the executable; grading works offline.
 
 Scores use deterministic rules documented in README.md. Physical page layout and contextual sentence quality cannot be verified from XML; affected scores are explicitly marked estimated. Full credit for measured checks does not establish full visual compliance. The app assigns scores without an instructor scoring step.
+
+Partial credit includes recognizable manually created contents lists, figure lists and title pages, in keeping with the rubric.

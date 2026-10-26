@@ -173,7 +173,9 @@ def test_figure_list_is_not_main_toc(compliant):
         for f in roots['word/document.xml'].xpath('//w:fldSimple',namespaces=NS):
             if f.get(W+'instr','').startswith('TOC \\o'):f.set(W+'instr','HYPERLINK "example"')
     r=grade(mutate(compliant,change),'bad.docx')
-    assert row(r,'Table of Contents (TOC)')['score']==0
+    # The heading list remains as a manually created TOC: it can earn partial, not full, credit.
+    assert row(r,'Table of Contents (TOC)')['score']==3
+    assert row(r,'Table of Contents (TOC)')['checks'][0]['passed'] is False
     assert row(r,'List of Figures')['score']==5
 
 
@@ -222,3 +224,23 @@ def test_field_instructions_split_across_runs():
 
 def test_oversized_file_rejected():
     with pytest.raises(ValueError,match='15 MB'):grade(b'x'*15_000_001,'huge.docx')
+
+
+def test_manual_toc_gets_partial_credit_not_missing(compliant):
+    def change(roots):
+        for f in roots['word/document.xml'].xpath('//w:fldSimple',namespaces=NS):
+            if f.get(W+'instr','').startswith('TOC \\o'):
+                parent=f.getparent()
+                for child in list(f):parent.append(child)
+                parent.remove(f)
+    r=grade(mutate(compliant,change),'typed.docx')
+    assert row(r,'Table of Contents (TOC)')['score']==3
+
+
+def test_typed_title_cover_gets_rubric_partial_credit(compliant):
+    def change(roots):
+        f=roots['word/document.xml'].xpath('//w:fldSimple[@w:instr="TITLE"]',namespaces=NS)[0]
+        parent=f.getparent()
+        for child in list(f):parent.append(child)
+        parent.remove(f)
+    assert row(grade(mutate(compliant,change),'typed.docx'),'Title Page')['score']==1

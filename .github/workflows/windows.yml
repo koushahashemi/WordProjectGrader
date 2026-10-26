@@ -61,6 +61,7 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
           $blob = git hash-object -w build-result.json
-          $tree = "100644 blob $blob`tbuild-result.json" | git mktree
+          git update-index --add --cacheinfo "100644,$blob,build-result.json"
+          $tree = git write-tree
           $commit = git commit-tree $tree -p HEAD -m 'Record Windows build outcome'
           git push origin "${commit}:refs/heads/build-results/windows-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
