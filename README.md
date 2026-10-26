@@ -2,7 +2,17 @@
 
 A local teacher review app for the **Word Project 2026 / Together for Bears** assignment. Upload one or multiple `.docx` submissions, inspect OOXML evidence against the supplied rubric, assign 0/1/3/5 points per criterion, and export feedback, evidence JSON, or a batch CSV.
 
-## Run
+## Windows: install and launch with one double-click
+
+1. On GitHub choose **Code > Download ZIP**.
+2. Right-click the downloaded ZIP and choose **Extract All**.
+3. Open the extracted project folder and double-click **Install and Run.bat**.
+
+The batch file finds Python 3.11-3.13 or installs Python 3.12 for your user using Windows Package Manager (`winget`). It creates an isolated `.venv-windows` folder, installs the required packages, and opens the app in your browser. Internet access is needed for installation. Keep the command window open while grading; press Ctrl+C to stop. Double-click the same file next time to launch again. It reuses the environment and checks dependencies.
+
+If `winget` is unavailable, the script explains how to install Python manually. Run the file from the extracted folder, not from inside the ZIP. The batch file has been reviewed on Linux; execution on Windows still needs verification.
+
+## Manual setup (macOS/Linux or advanced users)
 
 Python 3.11+ recommended. From this repository:
 
