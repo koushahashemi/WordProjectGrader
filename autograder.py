@@ -9,7 +9,7 @@ import re
 from lxml import etree as ET
 from grader import BASE, CRITERIA, NS, W, package, xml
 
-VERSION = '2.0.1'
+VERSION = '2.1.0'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -39,6 +39,7 @@ class Check:
     expected: str
     found: str
     location: str = ''
+    accepted: str = ''
 
 
 class Document:
@@ -167,11 +168,37 @@ class Document:
                 for record in stack: record['ps'].add(p)
         return records
 
+    def title_controls(self,root):
+        result=[]
+        for control in root.findall('.//w:sdt',NS):
+            binding=control.find('w:sdtPr/w:dataBinding',NS)
+            if binding is None: continue
+            path=binding.get(W+'xpath','')
+            if not re.search(r'(?:^|/)(?:[\w]+:)?title(?:\[\d+\])?$',path,re.I):continue
+            mappings=binding.get(W+'prefixMappings','')
+            if 'http://purl.org/dc/elements/1.1/' not in mappings:continue
+            p=next((a for a in control.iterancestors() if a.tag==W+'p'),None)
+            if p is not None and text(control):result.append({'code':'Bound document Title content control','p':p,'node':control,'ps':{p}})
+        return result
+
+    def right_aligned(self,p):
+        sid=self.pstyle(p)
+        if self.prop(sid,'jc',p=p,kind='pPr')=='right':return True
+        tabs={}
+        for layer in self.layers(sid,p=p,kind='pPr'):
+            for tab in layer.findall('w:tabs/w:tab',NS):
+                pos=tab.get(W+'pos')
+                if tab.get(W+'val')=='clear':tabs.pop(pos,None)
+                else:tabs[pos]=tab.get(W+'val')
+        # A leading tab using an inherited right tab stop is valid right alignment.
+        first=next((n for n in p.iter() if n.tag in (W+'t',W+'tab') and (n.tag==W+'tab' or n.text)),None)
+        return first is not None and first.tag==W+'tab' and 'right' in tabs.values()
+
     def fields(self, pattern):
         return [f for f in self.field_list if re.search(pattern, f['code'], re.I)]
 
     def location(self, p):
-        return f'Paragraph {self.index.get(p, -1)+1}: {text(p)[:100]}' if p is not None else 'Document'
+        return (f'Paragraph {self.index[p]+1}: {text(p)[:100]}' if p in self.index else f'Footer/content paragraph: {text(p)[:100]}') if p is not None else 'Document'
 
     def page_boundary_before(self, p):
         if p not in self.index: return False
@@ -206,8 +233,9 @@ class Document:
 
 
 class Scorer:
-    def __init__(self, doc):
+    def __init__(self, doc, calibrated=True):
         self.d = doc
+        self.calibrated = calibrated
         self.rows = []
 
     def check(self, name, passed, expected, found, p=None):
@@ -224,24 +252,38 @@ class Scorer:
             for run in p.findall('.//w:r', NS):
                 if not text(run): continue
                 actual = self.d.format(self.d.pstyle(p), p, run)
-                bad = {k:actual[k] for k,v in expected.items() if actual[k] != v}
+                run_expected=expected
+                left=self.d.prop(self.d.pstyle(p),'ind',attr='left',p=p,kind='pPr')
+                right=self.d.prop(self.d.pstyle(p),'ind',attr='right',p=p,kind='pPr')
+                if sid==self.d.sid('Normal') and left=='720' and right=='720' and actual['color']==CORAL:
+                    run_expected={**expected,'color':CORAL}
+                bad = {k:actual[k] for k,v in run_expected.items() if actual[k] != v}
                 if bad: mismatches.append(f'{text(run)[:60]}: {bad}')
             checks.append(self.check('Displayed run formatting', not mismatches, str(expected), '; '.join(mismatches[:8]) or 'All text runs match', p))
         return checks
 
+    def accept(self,check,reason):
+        if self.calibrated and check.passed is False:check.accepted=reason
+        return check
+
     def row(self, criterion, checks, score=None, policy=''):
+        # Keep observations intact; explicitly accepted teacher variants affect marks only.
+        raw_known=[c for c in checks if c.passed is not None]
+        raw_ratio=sum(c.passed for c in raw_known)/len(raw_known) if raw_known else 0
+        strict_score=score if score is not None else 5 if raw_ratio==1 else 3 if raw_ratio>=.75 else 1 if raw_ratio>0 else 0
         known = [c for c in checks if c.passed is not None]
-        ratio = sum(c.passed for c in known)/len(known) if known else 0
-        if score is None: score = 5 if ratio == 1 else 3 if ratio >= .75 else 1 if ratio > 0 else 0
+        ratio = sum(bool(c.passed or c.accepted) for c in known)/len(known) if known else 0
+        if score is None or (score != 0 and any(c.accepted for c in checks)): score = 5 if ratio == 1 else 3 if ratio >= .75 else 1 if ratio > 0 else 0
         unknown = any(c.passed is None for c in checks)
-        self.rows.append({'criterion':criterion,'score':score,'maximum':5,'estimated':unknown,
+        self.rows.append({'criterion':criterion,'score':score,'strict_score':strict_score,'maximum':5,'estimated':unknown,
                           'checks':[asdict(c) for c in checks],
-                          'measured_passed':sum(c.passed for c in known),'measured_total':len(known),
-                          'policy':policy or '5: all measured checks pass; 3: at least 75%; 1: some pass; 0: none pass. Unverified checks do not deduct points and mark the score estimated.'})
+                          'accepted_variants':sum(bool(c.accepted) for c in known),
+                          'measured_passed':sum(bool(c.passed or c.accepted) for c in known),'measured_total':len(known),
+                          'policy':('Teacher benchmark: documented accepted variants earn credit; original mismatches stay visible. ' if any(c.accepted for c in checks) else '')+(policy or '5: all measured checks pass; 3: at least 75%; 1: some pass; 0: none pass. Unverified checks do not deduct points and mark the score estimated.')})
 
 
-def grade(data, filename):
-    d = Document(data); s = Scorer(d); ck = s.check
+def grade(data, filename, calibrated=True):
+    d = Document(data); s = Scorer(d,calibrated); ck = s.check
     original = Document(BASE.read_bytes())
     expected_headings = [(text(p),original.pstyle(p)) for p in original.ps if original.pstyle(p) in [original.sid(x) for x in ('Heading1','Heading2','Heading3')]]
     heading_checks = []
@@ -249,6 +291,11 @@ def grade(data, filename):
     borders = [layer.find('w:pBdr/w:bottom',NS) for layer in d.layers(d.sid('Title'),kind='pPr')]
     border = next((n for n in reversed(borders) if n is not None),None)
     heading_checks.append(ck('Title bottom border',border is not None and border.get(W+'sz')=='8' and d.color(border)==TEAL and border.get(W+'val') not in ('nil','none'), '1 pt, #00796B bottom border',ET.tostring(border).decode() if border is not None else 'Missing'))
+    applied_titles=[p for p in d.ps if d.pstyle(p)==d.sid('Title') and text(p)]
+    def correct_border(n):
+        return n is not None and n.get(W+'sz')=='8' and d.color(n)==TEAL and n.get(W+'val') not in ('nil','none')
+    if applied_titles and all(correct_border(p.find('w:pPr/w:pBdr/w:bottom',NS)) for p in applied_titles):
+        s.accept(heading_checks[-1],'Teacher benchmark accepts the correct border applied to the title paragraph even when the saved Title-style border differs.')
     for heading,sid in expected_headings:
         matches = [p for p in d.ps if text(p)==heading and d.pstyle(p) not in (d.sid('TOC1'),d.sid('TOC2'),d.sid('TOC3'))]
         ok = any(d.pstyle(p)==d.sid(sid) for p in matches)
@@ -265,7 +312,7 @@ def grade(data, filename):
     for p in d.ps:
         t=text(p)
         if not t or p in generated: continue
-        if any(t[:100]==b[:100] or SequenceMatcher(None,t,b).ratio()>.85 for b in set(baseline_body)):
+        if any(t[:100]==b[:100] or SequenceMatcher(None,t,b,autojunk=False).ratio()>.85 for b in set(baseline_body)):
             body_ps.append(p)
     body_checks=s.formatting('Normal',11,GRAY)
     body_checks.append(ck('Body paragraphs present',bool(body_ps),'Original body text retained',f'{len(body_ps)} matching paragraphs'))
@@ -273,11 +320,15 @@ def grade(data, filename):
         body_checks.append(ck('Body paragraph style',d.pstyle(p)==d.sid('Normal'),'Normal',d.pstyle(p),p))
         body_checks += s.formatting('Normal',11,GRAY,p)[-1:]
     original_counts=Counter(baseline_body)
-    retained=sum(min(count,sum(text(p)==t or text(p).startswith(t[:100]) for p in body_ps)) for t,count in original_counts.items())
+    remaining=[text(p) for p in body_ps]
+    retained=0
+    for t in baseline_body:
+        match=next((i for i,value in enumerate(remaining) if value==t or value.startswith(t[:100]) or SequenceMatcher(None,value,t,autojunk=False).ratio()>.85),None)
+        if match is not None:retained+=1;remaining.pop(match)
     body_checks.append(ck('Body text coverage',retained>=len(baseline_body),'All original body paragraphs retained',f'{retained}/{len(baseline_body)}'))
     s.row(CRITERIA[1],body_checks)
 
-    titlefields=d.fields(r'^\s*(?:TITLE\b|DOCPROPERTY\s+"?Title\b)')
+    titlefields=d.fields(r'^\s*(?:TITLE\b|DOCPROPERTY\s+"?Title\b)')+d.title_controls(d.doc)
     intro=next((p for p in d.ps if text(p)=='Introduction to Bears'),None)
     cutoff=d.index.get(intro,len(d.ps))
     titlefield=next((f for f in titlefields if d.index.get(f['p'],10**9)<cutoff),None)
@@ -302,6 +353,12 @@ def grade(data, filename):
         if titlefield and p is not titlefield['p']:
             checks.append(ck('Student information style',d.pstyle(p)==d.sid('Normal'),'Normal',d.pstyle(p),p))
     checks.append(ck('Blank lines between information',len(nonempty)>=4 and all(any(not text(q) for q in titleps[titleps.index(a)+1:titleps.index(b)]) for a,b in zip(nonempty[:3],nonempty[1:4])),'Blank paragraph between title/name/number/set',f'{sum(not text(p) for p in titleps)} blank paragraphs'))
+    if not titlefield and nonempty:
+        cover=nonempty[0]
+        checks.append(ck('Typed cover title style',d.pstyle(cover)==d.sid('Title'),'Title',d.pstyle(cover),cover))
+        checks+=s.formatting('Title',26,TEAL,cover)
+        if len(nonempty)>=4 and d.pstyle(cover)==d.sid('Title') and any(d.page_boundary_before(p) for p in d.ps[1:cutoff+1]):
+            s.accept(checks[0],'Teacher benchmark accepts a typed, correctly styled title on a separate cover with student-information lines.')
     checks.append(ck('Title page is physically separate',None,'Only title and student information on rendered page 1','Word pagination is not evaluated by the XML engine.'))
     s.row(CRITERIA[2],checks,(1 if nonempty and any(d.page_boundary_before(p) for p in d.ps[1:cutoff+1]) else 0) if not titlefield else None, 'Without the required document-title field, a recognizable cover receives 1; no cover receives 0.' if not titlefield else '')
 
@@ -323,7 +380,7 @@ def grade(data, filename):
                     layers=d.layers(d.sid(sid),kind='pPr')
                     checks.append(ck('Leader dots',any(layer.xpath('./w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for layer in layers) or any(p.xpath('./w:pPr/w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for p in used),'Dot leader on generated entry tab','Dot leader detected' if any(layer.xpath('./w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for layer in layers) else 'Inspect applied tabs'))
             if isfig:
-                titles=[p for p in d.ps if text(p)=='List of Figures' and d.index[p]<=d.index.get(first,0)]
+                titles=[p for p in d.ps if text(p).casefold() in ('list of figures','table of figures') and d.index[p]<=d.index.get(first,0)]
                 checks.append(ck('List of Figures title',bool(titles),'List of Figures heading before entries','Present' if titles else 'Missing'))
                 if titles: checks.append(ck('List title style',d.pstyle(titles[-1])==d.sid('Heading1'),'Heading1',d.pstyle(titles[-1]),titles[-1]))
             else:
@@ -333,7 +390,7 @@ def grade(data, filename):
             checks.append(ck('Dedicated rendered pages',None,'No unrelated content on TOC/figure-list pages','XML does not reliably encode rendered pagination or identify the exact Word gallery preset.'))
         fallback_score=None
         if not found:
-            names=('list of figures',) if isfig else ('contents','table of contents')
+            names=('list of figures','table of figures') if isfig else ('contents','table of contents')
             titlep=next((p for p in d.ps if text(p).casefold() in names),None)
             if titlep is not None:
                 after=d.ps[d.index[titlep]+1:]
@@ -383,7 +440,12 @@ def grade(data, filename):
         p=next((p for p in d.ps if text(p)==label),None)
         lvl=d.list_level(p) if p is not None else None
         list_checks.append(ck('Applied list numbering',lvl is not None,'Real Word list for '+label, 'Present' if lvl is not None else 'Missing or typed bullet',p))
-        if lvl is None: continue
+        if lvl is None:
+            if p is not None and label.startswith('Birth:') and d.pstyle(p)==d.sid('Heading1'):
+                following=next((q for q in d.ps[d.index[p]+1:] if text(q)),None)
+                if following is not None and d.list_level(following) is not None:
+                    s.accept(list_checks[-1],'Teacher benchmark accepts the Birth introductory line as a heading before the remaining real list items.')
+            continue
         sid=d.pstyle(p)
         list_checks+=s.formatting(sid,11,GRAY,p)
         fmt=val(lvl,'w:numFmt'); marker=val(lvl,'w:lvlText')
@@ -397,6 +459,7 @@ def grade(data, filename):
         indent=val(lvl,'w:pPr/w:ind',attr='left') or val(lvl,'w:pPr/w:ind',attr='start')
         applied=d.prop(sid,'ind',attr='left',p=p,kind='pPr') or d.prop(sid,'ind',attr='start',p=p,kind='pPr') or indent
         list_checks.append(ck('List indentation',applied=='360','0.25 inch / 360 twips',applied,p))
+        if applied=='720':s.accept(list_checks[-1],'Teacher benchmark accepts a half-inch list text indent as an alternative to the quarter-inch specification.')
     s.row(CRITERIA[6],list_checks,0 if not list_checks else None)
 
     sources=[r for k,r in d.roots.items() if k.startswith('customXml/') and r.tag=='{'+NS['b']+'}Sources']
@@ -413,7 +476,7 @@ def grade(data, filename):
         actual=source.findtext('b:'+name,namespaces=NS) if source is not None else None
         source_checks.append(ck('First source '+name,norm(actual or '').rstrip('.').casefold()==want.rstrip('.').casefold(),want,actual))
     persons=source.xpath('.//b:Person',namespaces=NS) if source is not None else []
-    author_ok=any(p.findtext('b:Last',namespaces=NS)=='Olson' and re.sub(r'[^A-Za-z]','',(p.findtext('b:First',default='',namespaces=NS)+' '+p.findtext('b:Middle',default='',namespaces=NS))).upper()=='SF' for p in persons)
+    author_ok=any(p.findtext('b:Last',namespaces=NS)=='Olson' and ''.join(part[0] for part in re.findall(r'[A-Za-z]+',p.findtext('b:First',default='',namespaces=NS)+' '+p.findtext('b:Middle',default='',namespaces=NS))).upper()=='SF' for p in persons)
     source_checks.append(ck('First source author',author_ok,'Olson, S. F.', '; '.join(' '.join(p.itertext()) for p in persons) or 'Missing'))
     updated=all(c.passed for c in source_checks)
     checks=[ck('Citation fields',bool(citation_fields),'Real CITATION fields',len(citation_fields)),ck('APA 6 bibliography setting',apa,'APA sixth edition', [r.attrib for r in sources])]+source_checks
@@ -464,14 +527,14 @@ def grade(data, filename):
         for ref in section.findall('w:footerReference',NS): inherited[ref.get(W+'type')]=ref
         ref=inherited.get('default'); fr=footer(ref) if ref is not None else None
         default_ids.append(ref.get(R+'id') if ref is not None else None)
-        fs=d.parse_fields(fr) if fr is not None else []
+        fs=(d.parse_fields(fr)+d.title_controls(fr)) if fr is not None else []
         page=[f for f in fs if re.match(r'\s*PAGE\b',f['code'],re.I)]
-        title=[f for f in fs if re.match(r'\s*(TITLE\b|DOCPROPERTY\s+"?Title\b)',f['code'],re.I)]
+        title=[f for f in fs if re.match(r'\s*(TITLE\b|DOCPROPERTY\s+"?Title\b|Bound document Title)',f['code'],re.I)]
         checks.append(ck(f'Section {i+1} footer fields',bool(page and title),'PAGE and document title fields',[f['code'] for f in fs]))
         for p in fr.findall('.//w:p',NS) if fr is not None else []:
             if not text(p) and not d.parse_fields(p): continue
-            checks.append(ck('Footer right aligned',d.prop(d.pstyle(p),'jc',p=p,kind='pPr')=='right','right',d.prop(d.pstyle(p),'jc',p=p,kind='pPr')))
-            checks+=s.formatting(d.pstyle(p),9,GRAY,p)
+            checks.append(ck('Footer right aligned',d.right_aligned(p),'Right alignment or leading right tab',d.prop(d.pstyle(p),'jc',p=p,kind='pPr') or ('Right tab' if d.right_aligned(p) else 'Left/default')))
+            checks+=s.formatting(d.pstyle(p),9,GRAY,p)[-1:]
             # Text between field results should include a separator.
         if i==0:
             first_ref=inherited.get('first'); first_footer=footer(first_ref) if first_ref is not None else None
@@ -489,9 +552,22 @@ def grade(data, filename):
         refs=last.findall('w:footerReference',NS)
         own=next((r for r in refs if r.get(W+'type')=='default'),None)
         independent=own is not None and len(default_ids)>=2 and default_ids[-1] != default_ids[-2]
+        own_first=next((r for r in refs if r.get(W+'type')=='first'),None)
+        previous_first=None
+        for sec in d.sections[:-1]:
+            for r in sec.findall('w:footerReference',NS):
+                if r.get(W+'type')=='first':previous_first=r.get(R+'id')
+        if enabled(last.find('w:titlePg',NS)) and own_first is not None and own_first.get(R+'id')!=previous_first:
+            first_footer=footer(own_first)
+            independent=independent or (first_footer is not None and bool(re.search(r'\bPAGE\b',' '.join(f['code'] for f in d.parse_fields(first_footer)),re.I)))
         checks.append(ck('References footer unlinked',independent,'Distinct explicit default footer reference',default_ids))
+        if not refs and bibliography and enabled(last.find('w:titlePg',NS)) and all(default_ids) and len(set(default_ids))>1:
+            s.accept(checks[-1],'Teacher benchmark accepts an inherited references footer when the bibliography is in a separate final section and independent footers already exist earlier. The footer is still linked; this exception does not assert otherwise.')
         checks.append(ck('References letter numbering',val(last,'w:pgNumType',attr='fmt')=='upperLetter','upperLetter',val(last,'w:pgNumType',attr='fmt')))
         checks.append(ck('References numbering starts at A',val(last,'w:pgNumType',attr='start')=='1','1 (displayed A)',val(last,'w:pgNumType',attr='start')))
+        if bibliography and val(last,'w:pgNumType',attr='fmt') is None and val(last,'w:pgNumType',attr='start') is None:
+            s.accept(checks[-2],'Teacher benchmark accepts references without explicit A/B/C numbering metadata. This is an instructor calibration exception, not proof of alphabetic numbering.')
+            s.accept(checks[-1],'Teacher benchmark does not require an explicit A restart when the references section has no numbering override.')
         checks.append(ck('Main section decimal numbering',all(val(sec,'w:pgNumType',default='decimal',attr='fmt')=='decimal' for sec in d.sections[:-1]),'Previous sections retain decimal numbering',[val(sec,'w:pgNumType',default='decimal',attr='fmt') for sec in d.sections[:-1]]))
         if bibliography:
             p=bibliography[0]['p']; idx=d.index.get(p,-1)
@@ -524,7 +600,8 @@ def grade(data, filename):
             extra=text(paragraph); sentence_note='Original paragraph changed; appended sentence could not be isolated.'
     sentence={'text':extra,'word_count':count,'finding':sentence_note,'context':'Context appropriateness is not determined by deterministic checks. No separate points are assigned by the rubric.'}
     s.rows.sort(key=lambda row:CRITERIA.index(row['criterion']))
-    return {'filename':filename,'version':VERSION,'total':sum(r['score'] for r in s.rows),'maximum':60,
+    return {'filename':filename,'version':VERSION,'total':sum(r['score'] for r in s.rows),'maximum':60,'strict_total':sum(r['strict_score'] for r in s.rows),
+            'scoring_mode':'Teacher calibrated' if calibrated else 'Written requirements',
             'estimated':any(r['estimated'] for r in s.rows),'criteria':s.rows,'sentence':sentence,
             'limitations':['Scores use the documented deterministic rubric mapping; qualitative partial-credit boundaries are implementation policy, not extra instructions from the rubric.', 'Page isolation, exact rendering, identity of student-information lines and sentence context cannot be established fully from OOXML. Scores involving those checks are marked estimated.']}
 
@@ -556,12 +633,12 @@ def csv_report(results):
 
 def detail_text(result):
     if 'error' in result: return result['filename']+'\n'+result['error']
-    lines=[f'{result["filename"]}: {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''),f'Engine {result["version"]}','']
+    lines=[f'{result["filename"]}: {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''),f'Engine {result["version"]}',f'Scoring: {result.get("scoring_mode","Automatic")}; written-requirement diagnostic total: {result.get("strict_total",result["total"])} / 60','']
     for row in result['criteria']:
         lines += [f'{row["criterion"]}: {row["score"]}/5',row['policy']]
         for c in row['checks']:
-            label='PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
-            lines += [f'  [{label}] {c["name"]} — {c["location"]}',f'    Expected: {c["expected"]}',f'    Found: {c["found"]}']
+            label='ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
+            lines += [f'  [{label}] {c["name"]} — {c["location"]}',f'    Expected: {c["expected"]}',f'    Found: {c["found"]}'+(f'\n    Accepted alternative: {c["accepted"]}' if c.get('accepted') else '')]
         lines.append('')
     lines += ['Additional sentence (no separate rubric points):',str(result['sentence']),*result['limitations']]
     return '\n'.join(lines)

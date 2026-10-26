@@ -35,7 +35,7 @@ class GraderApp:
         style.configure('Sub.TLabel',font=(family,10))
         outer=ttk.Frame(root,padding=16); outer.pack(fill='both',expand=True)
         ttk.Label(outer,text='Bears Assignment Grader',style='Title.TLabel').pack(anchor='w')
-        ttk.Label(outer,text='Automatic scoring | Word Project 2026 | 12 criteria / 60 points',style='Sub.TLabel').pack(anchor='w',pady=(2,10))
+        ttk.Label(outer,text='Teacher-calibrated automatic scoring | Word Project 2026 | 12 criteria / 60 points',style='Sub.TLabel').pack(anchor='w',pady=(2,10))
         tools=ttk.Frame(outer);tools.pack(fill='x')
         self.add=ttk.Button(tools,text='Add Word files...',command=self.choose_files);self.add.pack(side='left',padx=(0,6))
         self.folder=ttk.Button(tools,text='Add folder...',command=self.choose_folder);self.folder.pack(side='left',padx=6)
@@ -74,7 +74,7 @@ class GraderApp:
         self.rubric.bind('<<TreeviewSelect>>',self.select_criterion)
         self.details=ScrolledText(split,wrap='word',font=(family,10),padx=12,pady=10,state='disabled')
         split.add(self.details,weight=2)
-        ttk.Label(outer,text='Estimated = XML cannot verify every qualitative/layout requirement. The app still assigns a score; no manual scoring step is required.',wraplength=1150).pack(anchor='w',pady=(10,0))
+        ttk.Label(outer,text='Teacher-calibrated scores. ACCEPTED notes explain benchmark alternatives. Estimated = XML cannot verify every layout requirement.',wraplength=1150).pack(anchor='w',pady=(10,0))
         root.after(100,self.poll)
 
     def show_text(self,content):
@@ -140,7 +140,7 @@ class GraderApp:
             self.selected.set(result['filename']+' - unable to grade');self.show_text(result['error']);return
         self.selected.set(f'{result["filename"]} - {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''))
         for i,row in enumerate(result['criteria']):
-            self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(c['passed'] is False for c in row['checks']),sum(c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
+            self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(c['passed'] is False and not c.get('accepted') for c in row['checks']),sum(c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
         self.show_text(detail_text(result))
         failed=next((i for i,r in enumerate(result['criteria']) if r['score']<5),0)
         self.rubric.selection_set(str(failed))
@@ -151,12 +151,12 @@ class GraderApp:
         result=self.results[int(selected[0])]
         if 'error' in result:return
         row=result['criteria'][int(chosen[0])]
-        lines=[f'{row["criterion"]}: {row["score"]}/5',f'Measured checks passed: {row["measured_passed"]}/{row["measured_total"]}',row['policy'],'']
+        lines=[f'{row["criterion"]}: {row["score"]}/5',f'Written-requirement diagnostic: {row.get("strict_score",row["score"])}/5',f'Measured checks passed: {row["measured_passed"]}/{row["measured_total"]}',row['policy'],'']
         # Failed checks first, then limitations, then passing evidence.
         checks=sorted(row['checks'],key=lambda c:0 if c['passed'] is False else 1 if c['passed'] is None else 2)
         for c in checks:
-            label='PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
-            lines += [f'[{label}] {c["name"]}',c['location'],f'Expected: {c["expected"]}',f'Found: {c["found"]}','']
+            label='ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
+            lines += [f'[{label}] {c["name"]}',c['location'],f'Expected: {c["expected"]}',f'Found: {c["found"]}',('Accepted alternative: '+c['accepted']) if c.get('accepted') else '', '']
         lines+=['ADDITIONAL SENTENCE (no separate rubric points)',json.dumps(result['sentence'],indent=2,ensure_ascii=False)]
         self.show_text('\n'.join(lines))
 

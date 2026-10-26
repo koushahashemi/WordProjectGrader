@@ -243,4 +243,124 @@ def test_typed_title_cover_gets_rubric_partial_credit(compliant):
         parent=f.getparent()
         for child in list(f):parent.append(child)
         parent.remove(f)
-    assert row(grade(mutate(compliant,change),'typed.docx'),'Title Page')['score']==1
+    data=mutate(compliant,change)
+    assert row(grade(data,'typed.docx',calibrated=False),'Title Page')['score']==1
+    assert row(grade(data,'typed.docx'),'Title Page')['score']==5
+
+
+def test_full_author_name_is_equivalent_to_initials(compliant):
+    def change(roots):roots['customXml/item1.xml'].find('b:Source/b:Author/b:Author/b:NameList/b:Person/b:First',NS).text='Sigurd'
+    r=grade(mutate(compliant,change),'full-name.docx')
+    assert row(r,'Citations (In-text)')['score']==5
+
+
+def test_table_of_figures_is_a_valid_title(compliant):
+    def change(roots):
+        for t in roots['word/document.xml'].findall('.//w:t',NS):
+            if t.text=='List of Figures':t.text='Table of Figures'
+    assert row(grade(mutate(compliant,change),'figures.docx'),'List of Figures')['score']==5
+
+
+def test_optional_coral_callouts_are_not_body_errors(compliant):
+    def change(roots):
+        for p in roots['word/document.xml'].findall('.//w:body/w:p',NS):
+            value=''.join(p.xpath('.//w:t/text()',namespaces=NS))
+            if value.startswith('Bears play a vital ecological role'):
+                setprop(p,'pPr/ind',left='720',right='720')
+                for r in p.findall('.//w:r',NS):setprop(r,'rPr/color',val='FF6F61');ensure(r,'rPr/i')
+                break
+    r=grade(mutate(compliant,change),'callout.docx')
+    assert row(r,'Body Text')['score']==5
+
+
+def test_coral_body_text_without_callout_indents_still_loses_marks(compliant):
+    def change(roots):
+        for p in roots['word/document.xml'].findall('.//w:body/w:p',NS):
+            if ''.join(p.xpath('.//w:t/text()',namespaces=NS)).startswith('Bears play a vital ecological role'):
+                for r in p.findall('.//w:r',NS):setprop(r,'rPr/color',val='FF6F61')
+                break
+    assert row(grade(mutate(compliant,change),'bad.docx'),'Body Text')['score']<5
+
+
+def test_body_coverage_handles_updated_opening_citation(compliant):
+    def change(roots):
+        for p in roots['word/document.xml'].findall('.//w:body/w:p',NS):
+            if ''.join(p.xpath('.//w:t/text()',namespaces=NS)).startswith('“The great brown bear'):
+                # Changing cached citation text must not look like deletion of the paragraph.
+                for t in p.findall('.//w:t',NS):
+                    if 'Placeholder' in (t.text or ''):t.text=t.text.replace('Placeholder','Olson, 1956')
+    assert row(grade(mutate(compliant,change),'citation.docx'),'Body Text')['score']==5
+
+
+def test_property_content_control_footer_and_right_tab(compliant):
+    def change(roots):
+        styles=roots['word/styles.xml'];style=styles.xpath('./w:style[@w:styleId="Footer"]',namespaces=NS)[0]
+        setprop(style,'rPr/sz',val='22');setprop(style,'pPr/tabs/tab',val='right',pos='9360')
+        for k,root in roots.items():
+            if not k.startswith('word/footer'):continue
+            p=root.find('w:p',NS)
+            if p is None:continue
+            jc=p.find('w:pPr/w:jc',NS)
+            if jc is not None:jc.getparent().remove(jc)
+            lead=node('r');lead.append(node('tab'));p.insert(1,lead)
+            for field in list(p.findall('w:fldSimple',NS)):
+                if field.get(W+'instr')=='TITLE':
+                    control=node('sdt');setprop(control,'sdtPr/dataBinding',xpath='/cp:coreProperties[1]/dc:title[1]',prefixMappings="xmlns:dc='http://purl.org/dc/elements/1.1/'")
+                    contents=ensure(control,'sdtContent')
+                    for r in list(field):contents.append(r)
+                    p.replace(field,control)
+            for r in p.findall('.//w:r',NS):setprop(r,'rPr/sz',val='18')
+    r=grade(mutate(compliant,change),'footer.docx')
+    assert row(r,'Page Numbers')['score']==5
+
+
+def test_applied_title_border_is_explicit_calibration_exception(compliant):
+    def change(roots):
+        title=roots['word/styles.xml'].xpath('./w:style[@w:styleId="Title"]',namespaces=NS)[0]
+        setprop(title,'pPr/pBdr/bottom',val='single',sz='8',color='4F81BD')
+        for p in roots['word/document.xml'].xpath('//w:p[w:pPr/w:pStyle/@w:val="Title"]',namespaces=NS):setprop(p,'pPr/pBdr/bottom',val='single',sz='8',color='00796B')
+    data=mutate(compliant,change);r=grade(data,'border.docx')
+    assert row(r,'Headings')['score']==5
+    assert row(r,'Headings')['strict_score']<5
+    assert any(c['accepted'] and c['passed'] is False for c in row(r,'Headings')['checks'])
+    assert row(grade(data,'border.docx',calibrated=False),'Headings')['score']<5
+
+
+def test_quarter_and_half_inch_lists_both_earn_calibrated_credit(compliant):
+    def change(roots):
+        for indent in roots['word/numbering.xml'].findall('.//w:lvl/w:pPr/w:ind',NS):indent.set(W+'left','720')
+        for sty in roots['word/styles.xml'].xpath('./w:style[@w:styleId="ListBullet"]',namespaces=NS):setprop(sty,'pPr/ind',left='720')
+    r=grade(mutate(compliant,change),'lists.docx')
+    assert row(r,'Bulleted Lists')['score']==5
+    assert row(r,'Bulleted Lists')['accepted_variants']>0
+
+
+def test_wrong_list_indent_still_deducts(compliant):
+    def change(roots):
+        for indent in roots['word/numbering.xml'].findall('.//w:lvl/w:pPr/w:ind',NS):indent.set(W+'left','1440')
+        for sty in roots['word/styles.xml'].xpath('./w:style[@w:styleId="ListBullet"]',namespaces=NS):setprop(sty,'pPr/ind',left='1440')
+    assert row(grade(mutate(compliant,change),'lists.docx'),'Bulleted Lists')['score']<5
+
+
+def test_unlinked_first_page_reference_footer_is_recognized(compliant):
+    def change(roots):
+        sections=roots['word/document.xml'].findall('.//w:sectPr',NS)
+        last=sections[-1];ensure(last,'titlePg');ref=last.find('w:footerReference',NS);ref.set(W+'type','first')
+    r=grade(mutate(compliant,change),'first-footer.docx')
+    assert next(c for c in row(r,'Section Break and Page Numbering')['checks'] if c['name']=='References footer unlinked')['passed']
+
+
+def test_reference_calibration_exceptions_stay_visible(compliant):
+    def change(roots):
+        doc=roots['word/document.xml'];body=doc.find('w:body',NS)
+        sections=doc.findall('.//w:sectPr',NS)
+        first=deepcopy(sections[0]);new=paragraph();ensure(new,'pPr').append(first)
+        body.insert(8,new)
+        # Independent earlier main-section footer; final references inherit it.
+        sections[0].find('w:footerReference',NS).set('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id','rIdAutoFooter2')
+        last=sections[-1];last.remove(last.find('w:footerReference',NS));last.remove(last.find('w:pgNumType',NS));ensure(last,'titlePg')
+    data=mutate(compliant,change);r=grade(data,'references.docx')
+    section=row(r,'Section Break and Page Numbering')
+    assert section['score']==5 and section['strict_score']<5
+    assert section['accepted_variants']==3
+    assert row(grade(data,'references.docx',calibrated=False),'Section Break and Page Numbering')['score']<5

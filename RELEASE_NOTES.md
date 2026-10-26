@@ -1,12 +1,10 @@
-## Bears Grader 2.0.1
+## Bears Grader 2.1.0 — teacher-calibrated scoring
 
-- Native Windows desktop app: download BearsGrader.exe and double-click. No Python installation or browser required.
-- Automatic scores for all 12 assignment rubric criteria and a batch summary out of 60.
-- Multiple-file and folder input; bad submissions do not stop the batch.
-- Click any criterion to inspect deductions, expected/found values and paragraph locations.
-- Export batch grades to CSV and detailed reports to text or JSON.
-- Assignment assets bundled inside the executable; grading works offline.
+- The instructor's supplied full-mark submission now receives 60/60; no filename or file-hash overrides are used.
+- Fixes false deductions for optional coral callouts, full author names, Table of Figures headings, title-property content controls, inherited right tab stops, footer run formatting, and body text with updated citations.
+- Documents accepted formatting/structure alternatives from the teacher benchmark. These remain visible as ACCEPTED in deduction details, alongside original expected and found values.
+- Keeps written-requirement diagnostic scores in detailed reports, separately from calibrated grades.
+- Adds positive and negative regression tests so missing requirements and unrelated formatting defects continue to lose marks.
+- Student submission and personal data are not included in the app or repository.
 
-Scores use deterministic rules documented in README.md. Physical page layout and contextual sentence quality cannot be verified from XML; affected scores are explicitly marked estimated. Full credit for measured checks does not establish full visual compliance. The app assigns scores without an instructor scoring step.
-
-Partial credit includes recognizable manually created contents lists, figure lists and title pages, in keeping with the rubric.
+Download BearsGrader.exe and replace the previous executable. No Python installation is needed. Exact page layout and sentence context remain XML-only limitations.
