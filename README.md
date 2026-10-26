@@ -1,46 +1,60 @@
-# Bears Word Project Grader
+# Bears Assignment Grader — Windows desktop app
 
-A local teacher review app for the **Word Project 2026 / Together for Bears** assignment. Upload one or multiple `.docx` submissions, inspect OOXML evidence against the supplied rubric, assign 0/1/3/5 points per criterion, and export feedback, evidence JSON, or a batch CSV.
+Automatically grades `.docx` submissions for the **Word Project 2026 / Together for Bears** assignment. This version replaces the original manual-scoring browser prototype with a native desktop app. No browser, web server, API key, or AI service is required.
 
-## Windows: install and launch with one double-click
+## Windows executable (recommended)
 
-1. On GitHub choose **Code > Download ZIP**.
-2. Right-click the downloaded ZIP and choose **Extract All**.
-3. Open the extracted project folder and double-click **Install and Run.bat**.
+Open this repository's **Releases** page and download **BearsGrader.exe** from the latest desktop release. Double-click it. Python does not need to be installed. An unsigned app may trigger Windows reputation checks; verify the download came from this repository. The executable is built on Windows by the repository's GitHub Actions workflow, tested before upload, and attached to tagged releases. If a build fails, no executable is published: inspect the **Actions** tab. This project does not contain a checked-in executable.
 
-The batch file finds Python 3.11-3.13 or installs Python 3.12 for your user using Windows Package Manager (`winget`). It creates an isolated `.venv-windows` folder, installs the required packages, and opens the app in your browser. Internet access is needed for installation. Keep the command window open while grading; press Ctrl+C to stop. Double-click the same file next time to launch again. It reuses the environment and checks dependencies.
+## Use the app
 
-If `winget` is unavailable, the script explains how to install Python manually. Run the file from the extracted folder, not from inside the ZIP. The batch file has been reviewed on Linux; execution on Windows still needs verification.
+1. Click **Add Word files…** and select multiple submissions, or **Add folder…** to grade all `.docx` files directly inside a folder.
+2. Grading starts automatically. Each file receives 12 criterion scores (0, 1, 3, or 5), plus a total out of 60 in the batch table. Scroll the table horizontally to see every criterion.
+3. Select a submission to see its rubric table. Select a criterion to see the measured checks, deductions, expected values, actual values, and paragraph locations. Failed checks appear first.
+4. **Export grades CSV…** saves the full score table for the batch. **Save full report…** saves every finding as text or JSON.
 
-## Manual setup (macOS/Linux or advanced users)
+No instructor scoring step is required. Files are read locally and never modified or uploaded. Results remain in memory until exported; closing the app clears the batch. One invalid submission is reported as an error and does not interrupt the others. There is no invented score for documents that cannot be read. Adding the same file again creates another row so different same-named submissions are not silently discarded.
 
-Python 3.11+ recommended. From this repository:
+## What is automatically checked
+
+- Title/Heading 1–3 and Normal style definitions, inheritance, theme fonts/colors, text-run overrides, original heading applications and body-text coverage.
+- Title field, centered title-page lines, information-line count and blank-line separation.
+- Heading TOC versus figure-list TOC field codes, saved results, entry styles, leader dots and titles.
+- Four real caption sequence fields, original caption wording, duplicate original labels, caption style, image placement and original image binaries. Recompressed images may be reported as changed.
+- The numbering definitions actually applied to the original lists, list text styles, bullet shape/color and indent (including level overrides).
+- APA sixth-edition source metadata, the first citation's Olson book details and citation-source resolution.
+- Word bibliography fields and saved entry formatting.
+- The footers referenced by each section, PAGE/TITLE fields, alignment, typography and first-page numbering configuration.
+- Section boundaries, separate references footer, upper-letter numbering starting at A, earlier decimal numbering and section margins.
+- The required appended sentence's presence, word count and sentence-ending count, reported separately without invented point deductions.
+
+## Scoring policy and practical limits
+
+The app assigns scores automatically. For criteria whose rubric uses qualitative descriptions, the deterministic mapping is **5 = all measured checks pass; 3 = at least 75% pass; 1 = at least one passes; 0 = none pass**. A missing primary feature (for example, no TOC field) receives 0 for that criterion. Checks are not individually worth points; the pass fraction selects a rubric level. Every criterion's report records its actual policy and the passed/total measured checks. Some criteria intentionally check both style definitions and their application. These thresholds are implementation policy because the supplied rubric does not specify numeric boundaries for “mostly” and “inconsistent.”
+
+Citations use the rubric's specific mapping: APA 6 + updated Olson source = 5; updated source only = 3; APA 6 only = 1; neither = 0. Missing/unresolved citation fields cannot earn 5. A typed bibliography without a Word field can earn 3 if its Bibliography style meets the guide, or 1 otherwise.
+
+**Estimated scores:** the engine inspects OOXML, not Microsoft Word's rendered pages. It cannot reliably verify physical page isolation, visual balance, exactly which Word gallery preset/commands were used, whether title-page lines truly identify the student, or whether the added sentence is context-appropriate. Those limitations are shown in the results; unverified checks do not deduct points. Full marks for measured checks are therefore not proof of full visual compliance. No claim of pixel-perfect Microsoft Word grading is made. Original-image byte comparison may flag a visually unchanged recompressed image. Changes to the first 100 characters of repeated body paragraphs can affect body-coverage matching. Teachers can inspect flagged details but do not have to enter scores.
+
+The extra sentence and filename have no separate rubric point allocation. The rubric's overall-level thresholds conflict with its 60-point total; the app reports the point total rather than inventing overall levels. The bundled `Bears.docx` is the original source, not a model answer. Assignment PDFs remain in `assets/` for reference.
+
+## Run from source on Windows
+
+Download the repository ZIP (**Code → Download ZIP**), **Extract All**, then double-click **Install and Run.bat**. It finds Python 3.11–3.13 or installs Python 3.12 using `winget`, creates `.venv-windows`, installs dependencies, and starts the desktop app. If `winget` is unavailable, the script gives manual Python installation instructions. Internet access is required for initial installation, but grading works offline.
+
+To build your own executable, install Python 3.12 and double-click **Build Windows EXE.bat**. The output is `dist/BearsGrader.exe`. The Windows Actions workflow also tests the packaged executable, including its embedded assignment assets and desktop UI, before publishing it.
+
+## Develop / test
 
 ```bash
 python -m venv .venv
+# Windows: .venv\Scripts\activate
 source .venv/bin/activate
-# Windows PowerShell: .venv\Scripts\Activate.ps1
-python -m pip install -r requirements.txt
-streamlit run app.py
-```
-
-Open the local address printed by Streamlit. No accounts, external services, Microsoft Word installation, or API keys are required. Student uploads remain in server memory; the app does not save them to disk. Run locally for local processing. Do not expose the server publicly without authentication and an appropriate deployment review.
-
-## Grading approach
-
-The 12 rubric rows total 60 points. The app extracts saved style definitions, direct formatting indicators, field instructions (including simple fields), numbering definitions, citation source metadata, footer fields, section settings, and margins. It compares the required added sentence with the original Bears paragraph and flags original paragraphs that no longer match exactly. Required citation edits can also cause text differences.
-
-This is an **assisted grading tool**, not a fully automatic marker. Scores start unreviewed. Missing structural evidence may suggest zero, but every final score is a teacher decision. Review all rows before treating a grade as final. Draft exports are marked explicitly. Feedback and scores live in the current Streamlit session: download them before leaving. JSON exports are evidence records; importing/resuming them is not implemented.
-
-Saved XML cannot prove a student's editing process. Style inheritance, theme resolution, applied numbering, first-page footer behavior, caption placement, heading hierarchy, exact pagination, and visual consistency require review in Microsoft Word. The app does not render a document preview. Context and exactly-one-sentence compliance require teacher judgment. Word counting treats internal apostrophes and hyphens as part of a word; verify edge cases against class policy. The extra sentence and filename checks carry no invented point allocation. The rubric's overall-level thresholds are inconsistent with its 60-point scale, so only points are reported. Optional background and callout styles are not mandatory.
-
-The original `assets/Bears.docx` is the baseline, not a model answer. Assignment PDFs are bundled for reference. The student instruction prohibiting AI is assignment context; the grader itself calls no AI services and makes no AI-use determinations.
-
-## Validate
-
-```bash
 python -m pip install -r requirements-dev.txt
 python -m pytest -q
+python desktop.py
 ```
 
-Malformed or oversized ZIP documents are rejected (15 MB upload, 60 MB expanded package, 2,000 entries). Uploaded content is not executed and XML external entity resolution/network access are disabled. This is a local instructor tool, not a hardened public upload service.
+Tkinter is bundled with standard Windows Python. On Linux, install your distribution's Python Tk package and use a graphical session. `python desktop.py --self-test --output desktop-smoke.json` exercises the actual native UI and bundled baseline (requires a display).
+
+Tests include a compliant structural fixture, deductions for formatting and footer defects, all four citation rubric levels, real versus fake TOCs, batch continuation after invalid files, formula-safe CSV names, XML entity protection, and package expansion limits. The engine limits files to 15 MB, expanded packages to 60 MB, and ZIP entries to 2,000. No uploaded macros or document code are executed.

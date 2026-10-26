@@ -6,8 +6,8 @@ if errorlevel 1 goto failed
 echo Bears Word Project Grader - Windows setup
 echo Keep this window open while using the app.
 echo.
-if not exist "app.py" goto missing_files
-if not exist "requirements.txt" goto missing_files
+if not exist "desktop.py" goto missing_files
+if not exist "requirements-desktop.txt" goto missing_files
 
 rem Prefer supported Python versions with wheels for the pinned dependencies.
 call :find_python
@@ -31,14 +31,13 @@ if errorlevel 1 goto failed
 :check_venv
 ".venv-windows\Scripts\python.exe" -c "import sys; sys.exit(0 if (3,11) <= sys.version_info[:2] < (3,14) else 1)"
 if errorlevel 1 goto bad_venv
-".venv-windows\Scripts\python.exe" -m pip install --disable-pip-version-check -r "requirements.txt"
+".venv-windows\Scripts\python.exe" -m pip install --disable-pip-version-check -r "requirements-desktop.txt"
 if errorlevel 1 goto failed
 
 echo.
-echo Starting the app. Your browser should open automatically.
-echo If it does not, open http://127.0.0.1:8501 in your browser.
-echo To stop the app, press Ctrl+C in this window.
-".venv-windows\Scripts\python.exe" -m streamlit run "app.py" --server.address 127.0.0.1 --server.headless false --browser.gatherUsageStats false
+echo Starting the desktop app.
+echo Close the app window when you are finished.
+".venv-windows\Scripts\python.exe" "desktop.py"
 if errorlevel 1 goto failed
 exit /b 0
 
