@@ -8,8 +8,9 @@ import io
 import re
 from lxml import etree as ET
 from grader import BASE, CRITERIA, NS, W, package, xml
+from matching import canonical, same_text, near, twips, inches, points, font_family, describe_format
 
-VERSION = '2.1.0'
+VERSION = '2.2.0'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -146,6 +147,8 @@ class Document:
                 is_style = layer.getparent() is not None and layer.getparent().tag == W+'style'
                 if is_style and enabled(italic): result['italic'] = not result['italic']
                 elif not is_style: result['italic'] = enabled(italic)
+        result['font'],face_italic=font_family(result['font'])
+        result['italic']=result['italic'] or face_italic
         return result
 
     def parse_fields(self, root):
@@ -178,6 +181,7 @@ class Document:
             mappings=binding.get(W+'prefixMappings','')
             if 'http://purl.org/dc/elements/1.1/' not in mappings:continue
             p=next((a for a in control.iterancestors() if a.tag==W+'p'),None)
+            if p is None:p=control.find('.//w:sdtContent//w:p',NS)
             if p is not None and text(control):result.append({'code':'Bound document Title content control','p':p,'node':control,'ps':{p}})
         return result
 
@@ -246,7 +250,7 @@ class Scorer:
         expected = {'font':'Segoe UI','size':str(size*2),'color':color}
         if italic is not None: expected['italic'] = italic
         f = self.d.format(sid, p)
-        checks = [self.check(f'{sid} style {k}', f[k] == v, str(v), f[k], p) for k,v in expected.items()]
+        checks = [self.check(f'{sid} style {k}', f[k] == v, points(v) if k=='size' else str(v), points(f[k]) if k=='size' else f[k], p) for k,v in expected.items()]
         if p is not None:
             mismatches = []
             for run in p.findall('.//w:r', NS):
@@ -258,8 +262,8 @@ class Scorer:
                 if sid==self.d.sid('Normal') and left=='720' and right=='720' and actual['color']==CORAL:
                     run_expected={**expected,'color':CORAL}
                 bad = {k:actual[k] for k,v in run_expected.items() if actual[k] != v}
-                if bad: mismatches.append(f'{text(run)[:60]}: {bad}')
-            checks.append(self.check('Displayed run formatting', not mismatches, str(expected), '; '.join(mismatches[:8]) or 'All text runs match', p))
+                if bad: mismatches.append(f'{text(run)[:60]}: {describe_format(bad)}')
+            checks.append(self.check('Displayed run formatting', not mismatches, describe_format(expected), '; '.join(mismatches[:8]) or 'All text runs match', p))
         return checks
 
     def accept(self,check,reason):
@@ -282,6 +286,19 @@ class Scorer:
                           'policy':('Teacher benchmark: documented accepted variants earn credit; original mismatches stay visible. ' if any(c.accepted for c in checks) else '')+(policy or '5: all measured checks pass; 3: at least 75%; 1: some pass; 0: none pass. Unverified checks do not deduct points and mark the score estimated.')})
 
 
+    def grouped_row(self,criterion,groups,policy,page_numbers=False):
+        summaries=[];checks=[]
+        for name,weight,evidence in groups:
+            known=[c for c in evidence if c.passed is not None]
+            passed=bool(known) and all(c.passed or c.accepted for c in known)
+            summaries.append({'name':name,'weight':weight,'passed':passed,'earned':weight if passed else 0,'checks':[c.name for c in evidence]})
+            checks+=evidence
+        failed=sum(not g['passed'] for g in summaries)
+        score=(0 if failed==4 else 5-failed) if page_numbers else sum(g['earned'] for g in summaries)
+        self.row(criterion,checks,score,policy)
+        self.rows[-1]['scoring_groups']=summaries
+
+
 def grade(data, filename, calibrated=True):
     d = Document(data); s = Scorer(d,calibrated); ck = s.check
     original = Document(BASE.read_bytes())
@@ -297,7 +314,7 @@ def grade(data, filename, calibrated=True):
     if applied_titles and all(correct_border(p.find('w:pPr/w:pBdr/w:bottom',NS)) for p in applied_titles):
         s.accept(heading_checks[-1],'Teacher benchmark accepts the correct border applied to the title paragraph even when the saved Title-style border differs.')
     for heading,sid in expected_headings:
-        matches = [p for p in d.ps if text(p)==heading and d.pstyle(p) not in (d.sid('TOC1'),d.sid('TOC2'),d.sid('TOC3'))]
+        matches = [p for p in d.ps if same_text(text(p),heading) and d.pstyle(p) not in (d.sid('TOC1'),d.sid('TOC2'),d.sid('TOC3'))]
         ok = any(d.pstyle(p)==d.sid(sid) for p in matches)
         heading_checks.append(ck('Heading style application',ok,f'{heading}: {sid}', [d.pstyle(p) for p in matches] or 'Heading missing',matches[0] if matches else None))
         if matches and ok:
@@ -329,7 +346,7 @@ def grade(data, filename, calibrated=True):
     s.row(CRITERIA[1],body_checks)
 
     titlefields=d.fields(r'^\s*(?:TITLE\b|DOCPROPERTY\s+"?Title\b)')+d.title_controls(d.doc)
-    intro=next((p for p in d.ps if text(p)=='Introduction to Bears'),None)
+    intro=next((p for p in d.ps if same_text(text(p),'Introduction to Bears')),None)
     cutoff=d.index.get(intro,len(d.ps))
     titlefield=next((f for f in titlefields if d.index.get(f['p'],10**9)<cutoff),None)
     titleps=[]
@@ -380,9 +397,9 @@ def grade(data, filename, calibrated=True):
                     layers=d.layers(d.sid(sid),kind='pPr')
                     checks.append(ck('Leader dots',any(layer.xpath('./w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for layer in layers) or any(p.xpath('./w:pPr/w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for p in used),'Dot leader on generated entry tab','Dot leader detected' if any(layer.xpath('./w:tabs/w:tab[@w:leader="dot"]',namespaces=NS) for layer in layers) else 'Inspect applied tabs'))
             if isfig:
-                titles=[p for p in d.ps if text(p).casefold() in ('list of figures','table of figures') and d.index[p]<=d.index.get(first,0)]
+                titles=[p for p in d.ps if any(same_text(text(p),t) for t in ('list of figures','table of figures')) and d.index[p]<=d.index.get(first,0)]
                 checks.append(ck('List of Figures title',bool(titles),'List of Figures heading before entries','Present' if titles else 'Missing'))
-                if titles: checks.append(ck('List title style',d.pstyle(titles[-1])==d.sid('Heading1'),'Heading1',d.pstyle(titles[-1]),titles[-1]))
+                if titles: checks.append(ck('List title style',d.pstyle(titles[-1]) in (d.sid('Heading1'),d.sid('TOCHeading')),'Heading1 or TOCHeading',d.pstyle(titles[-1]),titles[-1]))
             else:
                 titles=[p for p in d.ps[:d.index.get(first,0)+1] if text(p).casefold() in ('contents','table of contents')]
                 checks.append(ck('TOC title',bool(titles),'Contents or Table of Contents','Present' if titles else 'Missing'))
@@ -391,12 +408,12 @@ def grade(data, filename, calibrated=True):
         fallback_score=None
         if not found:
             names=('list of figures','table of figures') if isfig else ('contents','table of contents')
-            titlep=next((p for p in d.ps if text(p).casefold() in names),None)
+            titlep=next((p for p in d.ps if any(same_text(text(p),t) for t in names)),None)
             if titlep is not None:
                 after=d.ps[d.index[titlep]+1:]
                 entries=[]
                 for p in after:
-                    if text(p)=='Introduction to Bears' or (entries and d.page_boundary_before(p)): break
+                    if same_text(text(p),'Introduction to Bears') or (entries and d.page_boundary_before(p)): break
                     if text(p): entries.append(p)
                 expected_entries=('Figure ' if isfig else 'Introduction to Bears')
                 plausible=[p for p in entries if (expected_entries in text(p) or re.search(r'[.\t ]\s*\d+$',text(p)))]
@@ -410,34 +427,40 @@ def grade(data, filename, calibrated=True):
         s.row(criterion,checks,fallback_score,('Manual list: 3 if recognizable entries meet brand typography; 1 if a list title exists but entries/formatting are incomplete; 0 if absent. An automatic field is required for 5.' if not found else ''))
 
     seq=d.fields(r'^\s*SEQ\s+Figure\b')
-    captions=s.formatting('Caption',10,GRAY,italic=True)
-    from zipfile import ZipFile
-    from io import BytesIO
-    import hashlib
-    with ZipFile(BASE) as baseline_zip, ZipFile(BytesIO(data)) as submission_zip:
-        original_images=Counter(hashlib.sha256(baseline_zip.read(n)).hexdigest() for n in baseline_zip.namelist() if n.startswith('word/media/'))
-        submitted_images=Counter(hashlib.sha256(submission_zip.read(n)).hexdigest() for n in submission_zip.namelist() if n.startswith('word/media/'))
-    captions.append(ck('Original figure images retained',not (original_images-submitted_images),'All original image binaries retained','All retained' if not (original_images-submitted_images) else 'One or more original images differ or are missing; image recompression can also change bytes.'))
-    captions.append(ck('Four caption fields',len(seq)==4,'Exactly four SEQ Figure fields',len(seq)))
+    presence=[ck('Four caption fields',len(seq)==4,'Four real Word figure captions',f'{len(seq)} caption fields')]
+    figure_count=len(d.doc.xpath('//w:drawing | //w:pict',namespaces=NS))
+    presence.append(ck('Four figures present',figure_count>=4,'At least four figures',f'{figure_count} figures'))
     expected_titles=['Brown bear in its natural environment.','Grizzly bear with her cubs.','Life Cycle of a Polar Bear','Polar bear resting on Arctic ice.']
+    placement=[];formatting=s.formatting('Caption',10,GRAY,italic=True)
+    matched=[]
+    def caption_content(value):
+        return re.sub(r'^\s*Figure\s*\d+\s*[:.\-–]?\s*','',value,flags=re.I)
     for title in expected_titles:
-        matches=[f for f in seq if title.rstrip('.') in text(f['p'])]
-        manual_duplicates=[p for p in d.ps if title.rstrip('.') in text(p) and p not in generated and not any(f['p'] is p for f in seq)]
-        captions.append(ck('Original typed figure label replaced',not manual_duplicates,'No duplicate typed original caption',f'{len(manual_duplicates)} duplicate label paragraphs'))
-        captions.append(ck('Original caption text',bool(matches),title,'Found in caption field paragraph' if matches else 'Missing or changed'))
+        matches=[f for f in seq if same_text(caption_content(text(f['p'])),title)]
+        presence.append(ck('Original caption text',bool(matches),title,'Found (punctuation/spacing/minor spelling differences ignored)' if matches else 'Missing or substantially changed'))
         for f in matches[:1]:
-            p=f['p']; captions.append(ck('Caption style applied',d.pstyle(p)==d.sid('Caption'),'Caption',d.pstyle(p),p))
-            captions+=s.formatting('Caption',10,GRAY,p,True)[-1:]
+            p=f['p'];matched.append(p)
+            applied=any(n.get(W+'styleId')==d.sid('Caption') for n in d.chain(d.pstyle(p)))
+            formatting.append(ck('Caption style applied',applied,'Caption or a style based on Caption',d.pstyle(p),p))
+            formatting+=s.formatting('Caption',10,GRAY,p,True)[-1:]
+            alignment=d.prop(d.pstyle(p),'jc',p=p,kind='pPr') or 'left (default)'
+            formatting.append(ck('Caption alignment',True,'No specific alignment is prescribed by the supplied guide',alignment,p))
             index=d.index.get(p,-1)
             nextp=next((q for q in d.ps[index+1:] if text(q) or q.xpath('.//w:drawing | .//w:pict',namespaces=NS)),None)
             image=nextp is not None and bool(nextp.xpath('.//w:drawing | .//w:pict',namespaces=NS))
-            captions.append(ck('Caption above image',image,'Next content paragraph contains figure','Image below' if image else 'Image not immediately below',p))
-    s.row(CRITERIA[4],captions,0 if not seq else None)
+            # An inline picture may share the caption paragraph; check XML order.
+            if p.xpath('.//w:drawing | .//w:pict',namespaces=NS):
+                nodes=list(p.iter());image=nodes.index(f['node'])<min(nodes.index(n) for n in p.xpath('.//w:drawing | .//w:pict',namespaces=NS))
+            placement.append(ck('Caption above image',image,'Caption directly above its figure','Figure follows caption' if image else 'Figure does not immediately follow caption',p))
+    if not matched:
+        placement.append(ck('Caption above image',False,'Captions above figures','No recognizable captions'))
+        formatting.append(ck('Caption text present',False,'Captions to evaluate','No recognizable captions'))
+    s.grouped_row(CRITERIA[4],[('All four figures have captions',2,presence),('Captions above figures',1,placement),('Caption formatting and style',2,formatting)],'Three groups: captions present (2 marks), above figures (1 mark), formatting/style (2 marks). Each group earns its weight when its measured checks pass; repeated failures within a group do not stack. Placement/style are assessed on present captions, avoiding a second deduction solely for an absent caption.')
 
     list_checks=[]
     baseline_lists=[text(p) for p in original.ps if original.list_level(p) is not None and text(p)]
     for label in baseline_lists:
-        p=next((p for p in d.ps if text(p)==label),None)
+        p=next((p for p in d.ps if same_text(text(p),label)),None)
         lvl=d.list_level(p) if p is not None else None
         list_checks.append(ck('Applied list numbering',lvl is not None,'Real Word list for '+label, 'Present' if lvl is not None else 'Missing or typed bullet',p))
         if lvl is None:
@@ -456,10 +479,16 @@ def grade(data, filename, calibrated=True):
             list_checks.append(ck('Bullet color',color==CORAL,'#FF6F61',color,p))
         else:
             list_checks.append(ck('Numbering format',fmt=='decimal','Decimal numbered list',fmt,p))
-        indent=val(lvl,'w:pPr/w:ind',attr='left') or val(lvl,'w:pPr/w:ind',attr='start')
-        applied=d.prop(sid,'ind',attr='left',p=p,kind='pPr') or d.prop(sid,'ind',attr='start',p=p,kind='pPr') or indent
-        list_checks.append(ck('List indentation',applied=='360','0.25 inch / 360 twips',applied,p))
-        if applied=='720':s.accept(list_checks[-1],'Teacher benchmark accepts a half-inch list text indent as an alternative to the quarter-inch specification.')
+        indents={}
+        for layer in [lvl.find('w:pPr',NS),*d.layers(sid,p=p,kind='pPr')]:
+            ind=layer.find('w:ind',NS) if layer is not None else None
+            if ind is not None:indents.update({k.split('}')[-1]:v for k,v in ind.attrib.items()})
+        left=twips(indents.get('start',indents.get('left')))
+        hanging=twips(indents.get('hanging','0'))
+        first=twips(indents.get('firstLine','0'))
+        bullet=left-hanging+first if None not in (left,hanging,first) else None
+        list_checks.append(ck('List indentation',near(bullet,360),'Bullet position: 0.25 in from left margin',f'Bullet: {inches(bullet)}; text: {inches(left)}; hanging indent: {inches(hanging)}',p))
+        if near(left,720) and near(bullet,720):s.accept(list_checks[-1],'Teacher benchmark accepts a half-inch list position as an alternative to the quarter-inch specification.')
     s.row(CRITERIA[6],list_checks,0 if not list_checks else None)
 
     sources=[r for k,r in d.roots.items() if k.startswith('customXml/') and r.tag=='{'+NS['b']+'}Sources']
@@ -474,9 +503,9 @@ def grade(data, filename, calibrated=True):
     source_checks=[]
     for name,want in expected_source.items():
         actual=source.findtext('b:'+name,namespaces=NS) if source is not None else None
-        source_checks.append(ck('First source '+name,norm(actual or '').rstrip('.').casefold()==want.rstrip('.').casefold(),want,actual))
+        source_checks.append(ck('First source '+name,same_text(actual,want,typos=name not in ('Year','SourceType')),want,actual))
     persons=source.xpath('.//b:Person',namespaces=NS) if source is not None else []
-    author_ok=any(p.findtext('b:Last',namespaces=NS)=='Olson' and ''.join(part[0] for part in re.findall(r'[A-Za-z]+',p.findtext('b:First',default='',namespaces=NS)+' '+p.findtext('b:Middle',default='',namespaces=NS))).upper()=='SF' for p in persons)
+    author_ok=any(same_text(p.findtext('b:Last',namespaces=NS),'Olson') and ''.join(part[0] for part in re.findall(r'[A-Za-z]+',p.findtext('b:First',default='',namespaces=NS)+' '+p.findtext('b:Middle',default='',namespaces=NS))).upper()=='SF' for p in persons)
     source_checks.append(ck('First source author',author_ok,'Olson, S. F.', '; '.join(' '.join(p.itertext()) for p in persons) or 'Missing'))
     updated=all(c.passed for c in source_checks)
     checks=[ck('Citation fields',bool(citation_fields),'Real CITATION fields',len(citation_fields)),ck('APA 6 bibliography setting',apa,'APA sixth edition', [r.attrib for r in sources])]+source_checks
@@ -543,7 +572,13 @@ def grade(data, filename, calibrated=True):
             checks.append(ck('Title-page number hidden',hidden,'Different first page with no PAGE field','Hidden' if hidden else 'Not hidden'))
             start=val(section,'w:pgNumType',attr='start')
             checks.append(ck('Main page numbering starts at 1',start in (None,'1'),'1 or Word default',start or 'default 1'))
-    s.row(CRITERIA[9],checks,0 if not any(default_ids) else None)
+    footer_groups=[('Font size and style',1,[]),('Right alignment',1,[]),('Title page counted as one, number hidden',1,[]),('Page number and Document Title field',1,[])]
+    for c in checks:
+        group=0 if c.name=='Displayed run formatting' else 1 if c.name=='Footer right aligned' else 2 if c.name in ('Title-page number hidden','Main page numbering starts at 1') else 3
+        footer_groups[group][2].append(c)
+    for name,weight,evidence in footer_groups:
+        if not evidence:evidence.append(ck(name,False,'Required footer feature','Footer missing'))
+    s.grouped_row(CRITERIA[9],footer_groups,'Start at 5. Deduct 1 per failed category: font/size/style, right alignment, title-page counting/hidden number, PAGE and Document Title fields. Repeated instances count once. If all four categories fail, award 0.',page_numbers=True)
 
     checks=[ck('Separate references section',len(d.sections)>=2,'At least two sections',len(d.sections))]
     if len(d.sections)>=2:
@@ -579,7 +614,8 @@ def grade(data, filename, calibrated=True):
     for i,sec in enumerate(d.sections):
         for side in ('top','bottom','left','right'):
             actual=val(sec,'w:pgMar',attr=side)
-            checks.append(ck(f'Section {i+1} {side} margin',actual=='1440','1 inch (1440 twips)',actual))
+            checks.append(ck(f'Section {i+1} {side} margin',near(actual,1440),'1 in',inches(actual)))
+            if side in ('left','right') and near(actual,1800):s.accept(checks[-1],'Instructor accepts 1.25 in side margins, as in the supplied margin reference.')
     checks+=s.formatting('Normal',11,GRAY)
     checks+=s.formatting('Title',26,TEAL)
     for sid,size in [('Heading1',18),('Heading2',16),('Heading3',14)]: checks+=s.formatting(sid,size,TEAL)
@@ -587,7 +623,7 @@ def grade(data, filename, calibrated=True):
     s.row(CRITERIA[11],checks)
 
     extra=''; sentence_note='Required heading or first body paragraph not found.'; count=None
-    target=next((i for i,p in enumerate(d.ps) if text(p)=='A Multifaceted Approach'),None)
+    target=next((i for i,p in enumerate(d.ps) if same_text(text(p),'A Multifaceted Approach')),None)
     if target is not None:
         paragraph=next((p for p in d.ps[target+1:] if text(p)),None)
         base='Effective bear conservation requires a multifaceted approach. Safe and tested strategies must be used.'

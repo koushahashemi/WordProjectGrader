@@ -104,11 +104,11 @@ def compliant():
     last.find('w:footerReference',NS).set('{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id','rIdAutoFooter2');body.append(last)
     for lvl in roots['word/numbering.xml'].findall('.//w:lvl',NS):
         if lvl.find('w:numFmt',NS) is not None:
-            setprop(lvl,'pPr/ind',left='360');setprop(lvl,'rPr/color',val='FF6F61')
+            setprop(lvl,'pPr/ind',left='720',hanging='360');setprop(lvl,'rPr/color',val='FF6F61')
             if lvl.find('w:numFmt',NS).get(W+'val')=='bullet':setprop(lvl,'lvlText',val='●')
     # The ListBullet style inherits the modified Normal style.
     for sty in styles.xpath('./w:style[@w:styleId="ListBullet"]',namespaces=NS):
-        setprop(sty,'pPr/ind',left='360')
+        setprop(sty,'pPr/ind',left='720')
     source=roots['customXml/item1.xml'];source.set('SelectedStyle','APASixthEditionOfficeOnline.xsl');source.set('StyleName','APA');source.set('Version','6')
     b='{'+NS['b']+'}'
     placeholder=source.find('b:Source',NS)
@@ -328,7 +328,7 @@ def test_applied_title_border_is_explicit_calibration_exception(compliant):
 
 def test_quarter_and_half_inch_lists_both_earn_calibrated_credit(compliant):
     def change(roots):
-        for indent in roots['word/numbering.xml'].findall('.//w:lvl/w:pPr/w:ind',NS):indent.set(W+'left','720')
+        for indent in roots['word/numbering.xml'].findall('.//w:lvl/w:pPr/w:ind',NS):indent.set(W+'left','720');indent.set(W+'hanging','0')
         for sty in roots['word/styles.xml'].xpath('./w:style[@w:styleId="ListBullet"]',namespaces=NS):setprop(sty,'pPr/ind',left='720')
     r=grade(mutate(compliant,change),'lists.docx')
     assert row(r,'Bulleted Lists')['score']==5

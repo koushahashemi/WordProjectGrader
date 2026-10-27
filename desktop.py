@@ -11,6 +11,7 @@ from tkinter import font as tkfont
 from tkinter.scrolledtext import ScrolledText
 from autograder import VERSION, grade, grade_paths, csv_report, detail_text
 from grader import BASE, CRITERIA
+from feedback import feedback_text
 
 SHORT = ['Headings','Body','Title page','TOC','Captions','Figures list','Lists','Citations','References','Footers','Sections','Branding']
 
@@ -40,6 +41,7 @@ class GraderApp:
         self.add=ttk.Button(tools,text='Add Word files...',command=self.choose_files);self.add.pack(side='left',padx=(0,6))
         self.folder=ttk.Button(tools,text='Add folder...',command=self.choose_folder);self.folder.pack(side='left',padx=6)
         self.clear=ttk.Button(tools,text='Clear batch',command=self.clear_batch);self.clear.pack(side='left',padx=6)
+        ttk.Button(tools,text='Save feedback...',command=self.export_feedback).pack(side='right',padx=6)
         ttk.Button(tools,text='Export grades CSV...',command=self.export_csv).pack(side='right',padx=6)
         ttk.Button(tools,text='Save full report...',command=self.export_report).pack(side='right',padx=6)
         self.progress=ttk.Progressbar(outer,mode='determinate');self.progress.pack(fill='x',pady=(10,4))
@@ -63,7 +65,7 @@ class GraderApp:
         review=ttk.Frame(panes,padding=(0,12,0,0));panes.add(review,weight=3)
         self.selected=tk.StringVar(value='Select a submission to see its rubric scores and deduction details.')
         ttk.Label(review,textvariable=self.selected,font=(family,11,'bold')).pack(anchor='w')
-        ttk.Label(review,text='Select any criterion below. FAIL entries explain deductions; UNVERIFIED entries identify score limitations.',wraplength=1150).pack(anchor='w',pady=(4,8))
+        ttk.Label(review,text='Feedback summarizes all lost marks. Select a criterion to inspect its technical details and scoring breakdown.',wraplength=1150).pack(anchor='w',pady=(4,8))
         split=ttk.Panedwindow(review,orient='horizontal');split.pack(fill='both',expand=True)
         rubric=ttk.Frame(split);split.add(rubric,weight=1)
         self.rubric=ttk.Treeview(rubric,columns=['criterion','score','failed','unknown'],show='headings',height=12,selectmode='browse')
@@ -72,13 +74,22 @@ class GraderApp:
         self.rubric.pack(fill='both',expand=True)
         self.rubric.tag_configure('deduction',foreground='#A12B1F')
         self.rubric.bind('<<TreeviewSelect>>',self.select_criterion)
-        self.details=ScrolledText(split,wrap='word',font=(family,10),padx=12,pady=10,state='disabled')
-        split.add(self.details,weight=2)
+        self.views=ttk.Notebook(split)
+        self.feedback=ScrolledText(self.views,wrap='word',font=(family,10),padx=12,pady=10,state='disabled')
+        self.details=ScrolledText(self.views,wrap='word',font=(family,10),padx=12,pady=10,state='disabled')
+        self.views.add(self.feedback,text='Feedback on lost marks')
+        self.views.add(self.details,text='Technical details')
+        split.add(self.views,weight=2)
         ttk.Label(outer,text='Teacher-calibrated scores. ACCEPTED notes explain benchmark alternatives. Estimated = XML cannot verify every layout requirement.',wraplength=1150).pack(anchor='w',pady=(10,0))
         root.after(100,self.poll)
 
     def show_text(self,content):
         self.details.configure(state='normal');self.details.delete('1.0','end');self.details.insert('1.0',content);self.details.configure(state='disabled')
+
+    def show_feedback(self,result=None,criterion=None):
+        self.feedback.configure(state='normal');self.feedback.delete('1.0','end')
+        if result:self.feedback.insert('1.0',feedback_text(result,criterion))
+        self.feedback.configure(state='disabled')
 
     def choose_files(self):
         paths=filedialog.askopenfilenames(title='Select student submissions',filetypes=[('Word documents','*.docx')])
@@ -137,11 +148,12 @@ class GraderApp:
         if not chosen:return
         result=self.results[int(chosen[0])]
         if 'error' in result:
-            self.selected.set(result['filename']+' - unable to grade');self.show_text(result['error']);return
+            self.selected.set(result['filename']+' - unable to grade');self.show_text(result['error']);self.show_feedback(result);return
         self.selected.set(f'{result["filename"]} - {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''))
         for i,row in enumerate(result['criteria']):
             self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(c['passed'] is False and not c.get('accepted') for c in row['checks']),sum(c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
         self.show_text(detail_text(result))
+        self.show_feedback(result)
         failed=next((i for i,r in enumerate(result['criteria']) if r['score']<5),0)
         self.rubric.selection_set(str(failed))
 
@@ -152,6 +164,10 @@ class GraderApp:
         if 'error' in result:return
         row=result['criteria'][int(chosen[0])]
         lines=[f'{row["criterion"]}: {row["score"]}/5',f'Written-requirement diagnostic: {row.get("strict_score",row["score"])}/5',f'Measured checks passed: {row["measured_passed"]}/{row["measured_total"]}',row['policy'],'']
+        for group in row.get('scoring_groups',[]):
+            summary=('Pass' if group['passed'] else 'Fail: one deduction') if row['criterion']==CRITERIA[9] else f"{group['earned']}/{group['weight']} marks"
+            lines.append(group['name']+': '+summary)
+        lines.append('')
         # Failed checks first, then limitations, then passing evidence.
         checks=sorted(row['checks'],key=lambda c:0 if c['passed'] is False else 1 if c['passed'] is None else 2)
         for c in checks:
@@ -159,10 +175,18 @@ class GraderApp:
             lines += [f'[{label}] {c["name"]}',c['location'],f'Expected: {c["expected"]}',f'Found: {c["found"]}',('Accepted alternative: '+c['accepted']) if c.get('accepted') else '', '']
         lines+=['ADDITIONAL SENTENCE (no separate rubric points)',json.dumps(result['sentence'],indent=2,ensure_ascii=False)]
         self.show_text('\n'.join(lines))
+        self.show_feedback(result)
 
     def clear_batch(self):
         if self.busy:return
-        self.results.clear();self.batch.delete(*self.batch.get_children());self.rubric.delete(*self.rubric.get_children());self.show_text('');self.status.set('Batch cleared. Add documents to grade.');self.selected.set('Select a submission.');self.progress.configure(value=0)
+        self.results.clear();self.batch.delete(*self.batch.get_children());self.rubric.delete(*self.rubric.get_children());self.show_text('');self.show_feedback();self.status.set('Batch cleared. Add documents to grade.');self.selected.set('Select a submission.');self.progress.configure(value=0)
+
+    def export_feedback(self):
+        if not self.results:messagebox.showinfo('No grades','Add documents first.');return
+        path=filedialog.asksaveasfilename(defaultextension='.txt',initialfile='Bears_Feedback.txt',filetypes=[('Plain-language feedback','*.txt')])
+        if path:
+            try:Path(path).write_text('\n\n'.join(feedback_text(r) for r in self.results),encoding='utf-8')
+            except OSError as exc:messagebox.showerror('Export failed',str(exc))
 
     def export_csv(self):
         if not self.results:messagebox.showinfo('No grades','Add documents first.');return

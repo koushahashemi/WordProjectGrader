@@ -21,12 +21,24 @@ No instructor scoring step is required. Files are read locally and never modifie
 - Title field, centered title-page lines, information-line count and blank-line separation.
 - Heading TOC versus figure-list TOC field codes, saved results, entry styles, leader dots and titles.
 - Four real caption sequence fields, original caption wording, duplicate original labels, caption style, image placement and original image binaries. Recompressed images may be reported as changed.
-- The numbering definitions actually applied to the original lists, list text styles, bullet shape/color and indent (including level overrides).
+- The numbering definitions actually applied to the original lists, list text styles, bullet shape/color and indent (including level overrides and hanging indentation).
 - APA sixth-edition source metadata, the first citation's Olson book details and citation-source resolution.
 - Word bibliography fields and saved entry formatting.
 - The footers referenced by each section, PAGE/TITLE fields, alignment, typography and first-page numbering configuration.
 - Section boundaries, separate references footer, upper-letter numbering starting at A, earlier decimal numbering and section margins.
 - The required appended sentence's presence, word count and sentence-ending count, reported separately without invented point deductions.
+
+## Grading and feedback updates (version 2.2)
+
+- **Page Numbers:** four categories—font/size/style, right alignment, title-page counting with number hidden, and PAGE plus Document Title. Start at 5, deduct 1 for each failed category, and award 0 if all four fail. Repeated problems in multiple sections are one category failure.
+- **Figures and Captions:** three groups worth 2/1/2 marks: all four figures have captions; captions appear above their figures; captions use the required formatting/style. Repeated formatting errors affect only the formatting group. Missing captions affect presence; placement and formatting are assessed on the captions that exist. The supplied guide prescribes no caption alignment, so observed alignment is reported without inventing an alignment deduction.
+- **Feedback on lost marks:** a separate default tab explains deductions in ordinary language and cites the corresponding project instruction or Brand Style Guide section. The Technical details tab retains the audit trail. **Save feedback...** exports plain-language feedback for the batch.
+- **Text matching:** punctuation, capitalization and spacing are ignored in assignment-text matching, including captions and citation publishers. Bounded minor spelling edits are accepted; unrelated text and changed numeric content (such as years) are rejected.
+- **Word compatibility:** equivalent named font faces such as Segoe UI italic/Bold are normalized, with their italic effect preserved. Linked document-title controls are recognized at both inline and paragraph/block level.
+- **Measurements:** font sizes are shown in points. Bullet positions account for hanging indentation; measurement comparisons allow an 8-twip rounding tolerance and understand inches, cm, mm and points. Per instructor calibration, 1.25-inch left/right margins are accepted and labeled as an alternative to the guide's 1 inch. This is an accepted margin variation, not a claim that 1.25 inches equals 1 inch.
+- **Section checks:** existing section-break, footer-linkage and A/B/C numbering behavior is unchanged.
+
+The instructor-provided full-mark benchmark still receives 60/60. Student examples remain local and are not bundled or committed. Tests use synthetic documents reflecting the relevant features.
 
 ## Teacher calibration (version 2.1)
 
@@ -40,7 +52,7 @@ Every accepted mismatch remains visible as **ACCEPTED**, with its original expec
 
 ## Scoring policy and practical limits
 
-The app assigns scores automatically. For criteria whose rubric uses qualitative descriptions, the deterministic mapping is **5 = all measured checks pass; 3 = at least 75% pass; 1 = at least one passes; 0 = none pass**. A missing primary feature receives 0 for that criterion, subject to the documented teacher-calibration alternatives above. Recognizable manually created contents/figure lists receive partial credit (3 when entry typography matches, otherwise 1); a manually typed title on a separate cover page receives 1 under written-requirement diagnostics, with the teacher-calibrated alternative described above. An automatic Word field is required for full written-requirement credit; teacher-calibrated title alternatives are recorded explicitly. Checks are not individually worth points; the pass fraction selects a rubric level. Every criterion's report records its actual policy and the passed/total measured checks. Some criteria intentionally check both style definitions and their application. These thresholds are implementation policy because the supplied rubric does not specify numeric boundaries for “mostly” and “inconsistent.”
+The app assigns scores automatically. Except for the Page Numbers and Figures/Captions scoring groups described above, criteria whose rubric uses qualitative descriptions use this deterministic mapping: **5 = all measured checks pass; 3 = at least 75% pass; 1 = at least one passes; 0 = none pass**. A missing primary feature receives 0 for that criterion, subject to the documented teacher-calibration alternatives above. Recognizable manually created contents/figure lists receive partial credit (3 when entry typography matches, otherwise 1); a manually typed title on a separate cover page receives 1 under written-requirement diagnostics, with the teacher-calibrated alternative described above. An automatic Word field is required for full written-requirement credit; teacher-calibrated title alternatives are recorded explicitly. Checks are not individually worth points; the pass fraction selects a rubric level. Every criterion's report records its actual policy and the passed/total measured checks. Some criteria intentionally check both style definitions and their application. These thresholds are implementation policy because the supplied rubric does not specify numeric boundaries for “mostly” and “inconsistent.”
 
 Citations use the rubric's specific mapping: APA 6 + updated Olson source = 5; updated source only = 3; APA 6 only = 1; neither = 0. Missing/unresolved citation fields cannot earn 5. A typed bibliography without a Word field can earn 3 if its Bibliography style meets the guide, or 1 otherwise.
 

@@ -1,10 +1,11 @@
-## Bears Grader 2.1.0 — teacher-calibrated scoring
+## Bears Grader 2.2.0
 
-- The instructor's supplied full-mark submission now receives 60/60; no filename or file-hash overrides are used.
-- Fixes false deductions for optional coral callouts, full author names, Table of Figures headings, title-property content controls, inherited right tab stops, footer run formatting, and body text with updated citations.
-- Documents accepted formatting/structure alternatives from the teacher benchmark. These remain visible as ACCEPTED in deduction details, alongside original expected and found values.
-- Keeps written-requirement diagnostic scores in detailed reports, separately from calibrated grades.
-- Adds positive and negative regression tests so missing requirements and unrelated formatting defects continue to lose marks.
-- Student submission and personal data are not included in the app or repository.
+- New Feedback on lost marks tab and batch feedback export: plain-language explanations linked to the instructions and style guide.
+- Page Numbers now uses the instructor's four-category deduction rule. Repeated font errors lose one mark total; all four failed categories receive 0/5.
+- Captions now have three visible scoring groups: presence (2 marks), placement (1), and formatting/style (2).
+- Accepts TOCHeading for the figures-list heading, punctuation/spacing differences and small spelling errors.
+- Fixes hanging-indent calculations and measurement rounding. Accepts the instructor-approved 1.25-inch side margins.
+- Displays font sizes in points; recognizes Mac-style font-face names and block-level document-title controls.
+- Section-break and references-numbering rules are unchanged. The original full-mark benchmark still scores 60/60.
 
-Download BearsGrader.exe and replace the previous executable. No Python installation is needed. Exact page layout and sentence context remain XML-only limitations.
+Download BearsGrader.exe and replace the previous executable. No Python or browser is required. Student submissions and personal details are not included. Exact rendered pagination and sentence-context judgment remain XML-only limitations.

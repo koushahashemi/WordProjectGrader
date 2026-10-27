@@ -35,7 +35,9 @@ def test_native_batch_scores_deductions_and_exports(tmp_path):
         app.rubric.selection_set('3');root.update();app.select_criterion()
         details=app.details.get('1.0','end')
         assert '0/5' in details and '[FAIL]' in details and 'Missing' in details
-        for name,method in [('grades.csv',app.export_csv),('report.txt',app.export_report),('report.json',app.export_report)]:
+        assert len(app.views.tabs())==2
+        assert 'Project Instruction 6' in app.feedback.get('1.0','end')
+        for name,method in [('feedback.txt',app.export_feedback),('grades.csv',app.export_csv),('report.txt',app.export_report),('report.json',app.export_report)]:
             target=tmp_path/name
             with patch('desktop.filedialog.asksaveasfilename',return_value=str(target)):method()
             assert target.exists()
