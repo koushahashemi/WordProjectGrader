@@ -14,7 +14,7 @@ REFERENCES={
  CRITERIA[8]:'Project Instruction 13 (Word-generated references on a new page).',
  CRITERIA[9]:'Project Instruction 12; Brand Style Guide, Header & Footer (section 9).',
  CRITERIA[10]:'Project Instruction 13 (new section, independent footer and A/B/C numbering).',
- CRITERIA[11]:'Brand Style Guide, Page Margins (section 8). Typography is graded in its own rubric criteria.',
+ CRITERIA[11]:'Brand Style Guide as a whole: typography (3), contents/figures lists (4–5), lists (6), margins (8), and header/footer (9).',
 }
 
 
@@ -65,6 +65,7 @@ def explanation(criterion,check):
       'Typed cover title style':'The typed cover title is not using the required Title style.',
       'Student information style':'A student-information line on the cover is not using Normal style.',
     }
+    if name=='Overall style-guide adherence':return found+' Review the guide as a complete system: named styles, brand colors, headings, supporting elements and page layout.'
     if name in specific:return specific[name]
     if name.startswith('Section ') and name.endswith('footer fields'):
         return 'A section footer is missing a page number or the linked Document Title. Insert both; a total-page-count field does not replace the title.'
@@ -95,6 +96,8 @@ def feedback_text(result,criterion=None):
     lines=[f'Feedback on lost marks — {result["filename"]}',f'Total: {result["total"]}/60','']
     for row in rows:
         lines += [f'{row["criterion"]}: {row["score"]}/5 ({5-row["score"]} '+('mark lost)' if 5-row['score']==1 else 'marks lost)'),REFERENCES[row['criterion']]]
+        if row.get('overall_assessment'):
+            lines.append('This is one overall style-guide assessment; the domain evidence is not a list of separate mark deductions.')
         if row.get('scoring_groups'):
             for g in row['scoring_groups']:
                 if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} '+('mark allocated to this check.' if g['weight']==1 else 'marks allocated to this check.')))

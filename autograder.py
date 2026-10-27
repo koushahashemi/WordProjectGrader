@@ -8,9 +8,10 @@ import io
 import re
 from lxml import etree as ET
 from grader import BASE, CRITERIA, NS, W, package, xml
+from branding import assess_brand
 from matching import canonical, same_text, near, twips, inches, points, font_family, describe_format
 
-VERSION = '3.0.0'
+VERSION = '3.0.1'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -706,8 +707,19 @@ def grade(data, filename, calibrated=True):
             c=ck(f'Section {i+1} {side} margin',near(actual,1440),'1 in',inches(actual))
             c.issues=['margin:'+side];checks.append(c)
             if side in ('left','right') and near(actual,1800):s.accept(c,'Instructor accepts 1.25 in side margins, as in the supplied margin reference.')
-    checks.append(ck('Visual consistency and spacing',None,'Consistent page layout; typography is graded in its own rubric criteria','No fixed paragraph-spacing values are specified. XML checks cannot evaluate visual balance.'))
-    s.row(CRITERIA[11],checks)
+    margin_evidence=[asdict(c) for c in checks]
+    overall=assess_brand(d,s.rows,margin_evidence,calibrated)
+    strict=assess_brand(d,s.rows,margin_evidence,False,overall['visible_body_adherence'])
+    for c in checks:c.scored=False
+    for name,fraction in overall['domains'].items():
+        c=ck('Overall evidence: '+name,fraction==1,'Coordinated adherence to the Brand Style Guide',f'{fraction:.0%} of measured evidence meets the guide')
+        c.scored=False;checks.append(c)
+    checks.append(ck('Overall style-guide adherence',overall['score']==5,'Consistent overall adherence to the Brand Style Guide',overall['summary']))
+    checks.append(ck('Rendered appearance',None,'Consistent visual layout','Physical page balance and exact rendered appearance remain unverified.'))
+    s.row(CRITERIA[11],checks,overall['score'],overall['policy'])
+    s.rows[-1]['strict_score']=strict['score']
+    s.rows[-1]['overall_assessment']=overall
+    s.rows[-1]['accepted_variants']=sum(bool(c.accepted) for c in checks)
 
     extra=''; sentence_note='Required heading or first body paragraph not found.'; count=None
     target=next((i for i,p in enumerate(d.ps) if same_text(text(p),'A Multifaceted Approach')),None)

@@ -1,10 +1,10 @@
-# Bears Assignment Grader 3.0.0
+# Bears Assignment Grader 3.0.1
 
 A native Windows desktop app that automatically grades the **Word Project 2026 / Together for Bears** assignment. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.
 
 ## Windows executable
 
-Open **Releases**, download **BearsGrader.exe** from version 3.0.0, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
+Open **Releases**, download **BearsGrader.exe** from version 3.0.1, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
 
 GitHub Actions builds and tests the executable on Windows, including an actual desktop self-test and the embedded assignment assets, before publishing tagged releases. If a build fails, no new executable is published; inspect the Actions tab.
 
@@ -20,16 +20,26 @@ Files are read locally, never modified or uploaded. A bad file is reported indiv
 
 ## Version 3 grading ownership
 
-The same underlying typography problem is not deducted again under another criterion.
+Individual rubric criteria retain ownership of their specific typography checks. In 3.0.1, Branding Consistency is a separate overall style-guide assessment, as requested by the instructor.
 
 | Criterion | Responsibility |
 | --- | --- |
 | Headings | Five equal one-mark groups: Title style definition; Heading 1 definition; Heading 2 definition; Heading 3 definition; Heading 1–3 application to document text. A style group includes its required font, size and color; Title also includes its border. |
 | Body Text | Normal style typography, body-text application/overrides, and original body-text retention. |
 | Title Page | Applying Title style to the cover title, title-property feature, student-information lines, centering, spacing and separate cover page. Inherited Title-definition errors remain under Headings. |
-| Branding Consistency | Page margins and document-wide layout. Does not repeat Title, Normal or heading typography. |
+| Branding Consistency | Overall adherence to the Brand Style Guide: typography, colors, style use, supporting elements, margins and layout. Gives one holistic score rather than repeating a list of individual deductions. |
 
 Inherited Normal/heading-definition failures appear as **INFO** when encountered in another criterion. They remain visible in the audit trail but do not deduct there. A local conflicting override still belongs to the criterion containing that text. Repeated instances of the same failed property/item within a criterion count once. The rubric table's **Lost items** count reflects distinct deductions or failed scoring groups, not the number of affected paragraphs.
+
+## Branding Consistency in 3.0.1
+
+This criterion now assesses the guide as a complete system. It does **not** average or sum the other rubric scores. It uses raw evidence in five equally weighted domains: typography, brand colors, style application, supporting elements (contents/figures lists, captions, bullets and footers), and margins/layout. Typography and colors include both saved named-style definitions and the visible formatting of long-form body text, so direct overrides cannot conceal a widespread formatting problem.
+
+Domain proportions are rounded to an overall 0–5 band. Margin compliance bounds the layout band; widespread heading-application or visible-body problems prevent full marks. With negligible coordinated named-style adoption (at most one of the five core styles meeting the guide), less than 20% correct original heading application and less than 50% supporting-element adherence, the overall score is **0**. Correct margins or directly formatted body prose alone do not establish the brand. No student identity, filename or document hash affects scoring.
+
+The supplied zero-mark reference receives 0/5, and the original full-mark reference remains 60/60. An isolated regional typo/formatting defect does not automatically cause an extra Branding deduction. Broader patterns across the guide can affect this overall assessment, while individual criteria continue using their own checks.
+
+The default feedback gives one overall conclusion and identifies the weak areas. Domain measurements and margin details appear as informational evidence, rather than separate mark deductions. Exact rendered page balance and visual spacing remain unverified; the app does not claim to render Microsoft Word's layout. No grammar or vocabulary scoring is added.
 
 ## Scoring
 
@@ -75,4 +85,4 @@ python desktop.py
 
 Tkinter ships with normal Windows Python. Linux needs a Python Tk installation and graphical display. `python desktop.py --self-test --output desktop-smoke.json` exercises the native UI and bundled baseline. GUI tests skip when no display is available on Linux.
 
-Tests cover grading ownership, equal heading groups, distinct-error 4/5 scores, repeated formatting, cover/footer variants, exact original-path opening, source metadata, captions, batch continuation, feedback exports and input validation. Limits: 15 MB per upload, 60 MB expanded ZIP size and 2,000 ZIP entries. XML external entity resolution/network access are disabled; uploaded document code is never executed by grading. Opening a file by double-click is a separate explicit action in the default application.
+Tests cover zero/full overall-brand anchors, widespread versus isolated formatting, independence from other rubric point totals, grading ownership, equal heading groups, distinct-error 4/5 scores, repeated formatting, cover/footer variants, exact original-path opening, source metadata, captions, batch continuation, feedback exports and input validation. Limits: 15 MB per upload, 60 MB expanded ZIP size and 2,000 ZIP entries. XML external entity resolution/network access are disabled; uploaded document code is never executed by grading. Opening a file by double-click is a separate explicit action in the default application.

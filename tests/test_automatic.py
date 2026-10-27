@@ -132,7 +132,7 @@ def row(result,name):return next(r for r in result['criteria'] if r['criterion']
 def test_baseline_auto_scores_without_manual_input():
     r=grade(BASE.read_bytes(),'Bears.docx')
     assert [q['criterion'] for q in r['criteria']]==CRITERIA
-    assert all(q['score'] in (0,1,3,5) for q in r['criteria'])
+    assert all(isinstance(q['score'],int) and 0<=q['score']<=5 for q in r['criteria'])
     assert r['total']==sum(q['score'] for q in r['criteria'])
     for name in ['Title Page','Table of Contents (TOC)','Figures and Captions','List of Figures','Bibliography / References','Page Numbers','Section Break and Page Numbering']:assert row(r,name)['score']==0
 

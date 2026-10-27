@@ -1,12 +1,10 @@
-## Bears Grader 3.0.0
+## Bears Grader 3.0.1
 
-- Double-click submission filenames to open the exact original file in the default application. Same-named files from different folders remain distinct; missing originals show a clear error.
-- Headings now has five equal one-mark groups: Title, Heading 1, Heading 2, Heading 3 style formatting, and Heading 1–3 application to text.
-- Applying Title style to the cover is evaluated only under Title Page. Branding Consistency covers layout/margins, without repeated typography deductions.
-- One distinct simple error receives 4/5. Repeated or inherited failures are grouped; shared errors owned by another rubric criterion are informational.
-- A page break is sufficient after the cover. A footer-free cover followed by a correctly numbered page 2 is accepted, including continued numbering.
-- Previous caption and four-category footer scoring, plain-language feedback, Word compatibility and text-matching improvements are retained. Existing references-section checks remain.
+- Branding Consistency now assesses overall adherence to the Brand Style Guide, including typography, colors, style application, supporting elements and layout.
+- The instructor-provided zero-mark reference receives 0/5 for Branding; the full-mark reference remains 60/60 overall.
+- Uses document features rather than identity, filename or hash. Correct margins alone no longer guarantee full Branding marks.
+- Provides one overall conclusion with informational domain evidence, rather than another list of individual mark deductions.
+- Distinguishes isolated formatting mistakes from widespread inconsistency, including direct formatting overrides in body text.
+- Existing individual rubric checks, document opening, batch grading and exports are retained. No grammar/vocabulary scoring is added.
 
-The full-mark instructor benchmark remains 60/60. Student submissions and personal data are not bundled. Exact rendered pagination and contextual sentence quality remain XML-only limitations.
-
-Download BearsGrader.exe and replace the previous executable. No Python or browser is required.
+Download BearsGrader.exe and replace the previous executable. No Python or browser is needed. Student reference documents are not bundled or committed. Physical page balance and exact rendered spacing remain XML-only limitations.

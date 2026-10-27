@@ -57,7 +57,10 @@ def test_normal_font_failure_is_not_duplicated_in_inheriting_lists(compliant):
         setprop(normal,'rPr/rFonts',ascii='Arial',hAnsi='Arial')
     result=grade(mutate(compliant,change),'normal.docx');s=scores(result)
     assert s['Body Text']==4
-    assert all(s[c]==5 for c in CRITERIA if c!='Body Text')
+    # Individual criteria still avoid duplicate inheritance penalties. The overall
+    # brand assessment can reflect a font problem affecting all visible body text.
+    assert all(s[c]==5 for c in CRITERIA if c not in ('Body Text','Branding Consistency'))
+    assert s['Branding Consistency']==4
     assert len(result['criteria'][1]['deductions'])==1
     assert 'Bulleted Lists:' not in feedback_text(result)
 
@@ -97,7 +100,7 @@ def test_layout_margin_problem_is_owned_by_branding(compliant):
     result=grade(mutate(compliant,change),'layout.docx');s=scores(result)
     assert s['Branding Consistency']==4
     assert all(s[c]==5 for c in CRITERIA if c!='Branding Consistency')
-    assert result['criteria'][11]['deductions']==['margin:left']
+    assert result['criteria'][11]['overall_assessment']['domains']['Margins and layout']==.75
 
 
 def split_cover(roots,start='2'):

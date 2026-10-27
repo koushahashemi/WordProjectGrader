@@ -26,9 +26,9 @@ def test_native_batch_scores_deductions_and_exports(tmp_path):
             root.update();time.sleep(.02)
         assert not app.busy
         assert len(app.batch.get_children())==3
-        assert app.results[0]['total']==12
+        assert app.results[0]['total']==9
         assert 'error' in app.results[1]
-        assert app.results[2]['total']==12
+        assert app.results[2]['total']==9
         app.batch.selection_set('0');root.update();app.select_submission();root.update()
         assert len(app.rubric.get_children())==12
         # TOC is missing: click the criterion and see concrete automatic deductions.
@@ -42,7 +42,7 @@ def test_native_batch_scores_deductions_and_exports(tmp_path):
             with patch('desktop.filedialog.asksaveasfilename',return_value=str(target)):method()
             assert target.exists()
         rows=list(csv.reader(io.StringIO((tmp_path/'grades.csv').read_text(encoding='utf-8-sig'))))
-        assert len(rows)==4 and rows[1][-3]=='12'
+        assert len(rows)==4 and rows[1][-3]=='9'
         assert len(json.loads((tmp_path/'report.json').read_text()))==3
         app.batch.selection_set('1');root.update();app.select_submission();assert 'unable to grade' in app.selected.get()
         app.clear_batch();assert not app.results and not app.batch.get_children()
