@@ -1,5 +1,7 @@
 """Native Windows desktop UI. No browser, server, account, or API key."""
 import argparse
+import os
+import subprocess
 import json
 from pathlib import Path
 import queue
@@ -14,6 +16,14 @@ from grader import BASE, CRITERIA
 from feedback import feedback_text
 
 SHORT = ['Headings','Body','Title page','TOC','Captions','Figures list','Lists','Citations','References','Footers','Sections','Branding']
+
+
+def launch_document(path):
+    path=Path(path).resolve()
+    if not path.is_file():raise FileNotFoundError('The original submission has been moved or deleted: '+str(path))
+    if path.suffix.lower()!='.docx':raise ValueError('Only submitted Word documents can be opened.')
+    if sys.platform=='win32':os.startfile(str(path))
+    else:subprocess.Popen(['open' if sys.platform=='darwin' else 'xdg-open',str(path)],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)
 
 
 class GraderApp:
@@ -45,7 +55,7 @@ class GraderApp:
         ttk.Button(tools,text='Export grades CSV...',command=self.export_csv).pack(side='right',padx=6)
         ttk.Button(tools,text='Save full report...',command=self.export_report).pack(side='right',padx=6)
         self.progress=ttk.Progressbar(outer,mode='determinate');self.progress.pack(fill='x',pady=(10,4))
-        self.status=tk.StringVar(value='Select multiple .docx files or a folder. Grading runs automatically; original documents are never changed.')
+        self.status=tk.StringVar(value='Select .docx files or a folder to grade. Double-click a filename to open its original Word document.')
         ttk.Label(outer,textvariable=self.status,wraplength=1150).pack(anchor='w',pady=(0,8))
         panes=ttk.Panedwindow(outer,orient='vertical');panes.pack(fill='both',expand=True)
         batch=ttk.Frame(panes);panes.add(batch,weight=2)
@@ -62,6 +72,8 @@ class GraderApp:
         self.batch.configure(xscrollcommand=hs.set)
         batch.columnconfigure(0,weight=1);batch.rowconfigure(0,weight=1)
         self.batch.bind('<<TreeviewSelect>>',self.select_submission)
+        self.batch.bind('<Double-1>',self.open_submission)
+        self.batch.bind('<Return>',self.open_submission)
         review=ttk.Frame(panes,padding=(0,12,0,0));panes.add(review,weight=3)
         self.selected=tk.StringVar(value='Select a submission to see its rubric scores and deduction details.')
         ttk.Label(review,textvariable=self.selected,font=(family,11,'bold')).pack(anchor='w')
@@ -69,7 +81,7 @@ class GraderApp:
         split=ttk.Panedwindow(review,orient='horizontal');split.pack(fill='both',expand=True)
         rubric=ttk.Frame(split);split.add(rubric,weight=1)
         self.rubric=ttk.Treeview(rubric,columns=['criterion','score','failed','unknown'],show='headings',height=12,selectmode='browse')
-        for col,label,width in [('criterion','Criterion',230),('score','/5',45),('failed','Failed',50),('unknown','Unverified',75)]:
+        for col,label,width in [('criterion','Criterion',230),('score','/5',45),('failed','Lost items',70),('unknown','Unverified',75)]:
             self.rubric.heading(col,text=label);self.rubric.column(col,width=width,minwidth=40,anchor='w' if col=='criterion' else 'center')
         self.rubric.pack(fill='both',expand=True)
         self.rubric.tag_configure('deduction',foreground='#A12B1F')
@@ -114,7 +126,7 @@ class GraderApp:
                     try:result=grade_paths([path])[0]
                     except Exception as exc:
                         # Keep the worker alive and report an engine error without a fabricated grade.
-                        result={'filename':Path(path).name,'error':f'Unexpected grading error: {type(exc).__name__}: {exc}'}
+                        result={'filename':Path(path).name,'source_path':str(Path(path).resolve()),'error':f'Unexpected grading error: {type(exc).__name__}: {exc}'}
                     self.events.put(('result',result,index+1,len(paths)))
             finally:self.events.put(('done',))
         threading.Thread(target=worker,daemon=True).start()
@@ -142,6 +154,23 @@ class GraderApp:
         except queue.Empty:pass
         self.root.after(100,self.poll)
 
+    def open_submission(self,event=None):
+        if event is not None and hasattr(event,'y') and getattr(event,'keysym','')!='Return':
+            item=self.batch.identify_row(event.y)
+            if not item or self.batch.identify_column(event.x)!='#1':return
+            self.batch.selection_set(item)
+        else:
+            items=self.batch.selection()
+            if not items:return
+            item=items[0]
+        path=self.results[int(item)].get('source_path')
+        if not path:
+            messagebox.showinfo('Original file unavailable','Add the original document again to open it from this list.')
+            return
+        try:launch_document(path)
+        except (OSError,ValueError) as exc:messagebox.showerror('Cannot open submission',str(exc))
+        return 'break'
+
     def select_submission(self,event=None):
         self.rubric.delete(*self.rubric.get_children())
         chosen=self.batch.selection()
@@ -151,7 +180,7 @@ class GraderApp:
             self.selected.set(result['filename']+' - unable to grade');self.show_text(result['error']);self.show_feedback(result);return
         self.selected.set(f'{result["filename"]} - {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''))
         for i,row in enumerate(result['criteria']):
-            self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(c['passed'] is False and not c.get('accepted') for c in row['checks']),sum(c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
+            self.rubric.insert('','end',iid=str(i),values=[row['criterion'],row['score'],sum(not g['passed'] for g in row['scoring_groups']) if row.get('scoring_groups') else len(row.get('deductions',[])),sum(c.get('scored',True) and c['passed'] is None for c in row['checks'])],tags=('deduction',) if row['score']<5 else ())
         self.show_text(detail_text(result))
         self.show_feedback(result)
         failed=next((i for i,r in enumerate(result['criteria']) if r['score']<5),0)
@@ -163,7 +192,7 @@ class GraderApp:
         result=self.results[int(selected[0])]
         if 'error' in result:return
         row=result['criteria'][int(chosen[0])]
-        lines=[f'{row["criterion"]}: {row["score"]}/5',f'Written-requirement diagnostic: {row.get("strict_score",row["score"])}/5',f'Measured checks passed: {row["measured_passed"]}/{row["measured_total"]}',row['policy'],'']
+        lines=[f'{row["criterion"]}: {row["score"]}/5',f'Written-requirement diagnostic: {row.get("strict_score",row["score"])}/5',f'Evidence checks passed: {row["measured_passed"]}/{row["measured_total"]}',row['policy'],'']
         for group in row.get('scoring_groups',[]):
             summary=('Pass' if group['passed'] else 'Fail: one deduction') if row['criterion']==CRITERIA[9] else f"{group['earned']}/{group['weight']} marks"
             lines.append(group['name']+': '+summary)
@@ -171,7 +200,7 @@ class GraderApp:
         # Failed checks first, then limitations, then passing evidence.
         checks=sorted(row['checks'],key=lambda c:0 if c['passed'] is False else 1 if c['passed'] is None else 2)
         for c in checks:
-            label='ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
+            label='INFO' if not c.get('scored',True) else 'ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
             lines += [f'[{label}] {c["name"]}',c['location'],f'Expected: {c["expected"]}',f'Found: {c["found"]}',('Accepted alternative: '+c['accepted']) if c.get('accepted') else '', '']
         lines+=['ADDITIONAL SENTENCE (no separate rubric points)',json.dumps(result['sentence'],indent=2,ensure_ascii=False)]
         self.show_text('\n'.join(lines))

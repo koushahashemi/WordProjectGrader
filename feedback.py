@@ -14,7 +14,7 @@ REFERENCES={
  CRITERIA[8]:'Project Instruction 13 (Word-generated references on a new page).',
  CRITERIA[9]:'Project Instruction 12; Brand Style Guide, Header & Footer (section 9).',
  CRITERIA[10]:'Project Instruction 13 (new section, independent footer and A/B/C numbering).',
- CRITERIA[11]:'Brand Style Guide, Typography (section 3) and Page Margins (section 8).',
+ CRITERIA[11]:'Brand Style Guide, Page Margins (section 8). Typography is graded in its own rubric criteria.',
 }
 
 
@@ -28,8 +28,8 @@ def explanation(criterion,check):
       'New section starts next page':'The references section is not configured to start on the next page. Use a Next Page section break before the bibliography.',
       'Main section decimal numbering':'The main document’s numbering has changed from ordinary numbers. Keep its numbering unchanged when formatting the bibliography section.',
       'Bibliography after last section break':'The bibliography is not located after the final section break. Place it in the new references section.',
-      'Title-page number hidden':'The title page’s page number is not configured to be hidden. Enable Different First Page and remove the visible number from that first-page footer.',
-      'Main page numbering starts at 1':'The title page is not configured to count as page 1. Start the document’s numbering at 1, while hiding the number on the title page.',
+      'Title-page number hidden':'The title page’s page number is not configured to be hidden. Use Different First Page with a blank first-page footer, or a footer-free cover followed by page 2.',
+      'Main page numbering starts at 1':'The title page is not configured to count as page 1. Hide its printed number and let the following page display 2, rather than restarting at 1.',
       'Footer right aligned':'The footer content is not right-aligned. Right-align the page number and document title, or use a right-aligned tab stop.',
       'Document Title field':'The cover title is not linked to the document’s Title property. Insert a Document Title field or linked Title content control.',
       'Student information lines':'The cover page is missing one or more required lines: document title, name, student number and set.',
@@ -97,10 +97,13 @@ def feedback_text(result,criterion=None):
         lines += [f'{row["criterion"]}: {row["score"]}/5 ({5-row["score"]} '+('mark lost)' if 5-row['score']==1 else 'marks lost)'),REFERENCES[row['criterion']]]
         if row.get('scoring_groups'):
             for g in row['scoring_groups']:
-                if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} marks allocated to this check.'))
-        seen=set()
+                if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} '+('mark allocated to this check.' if g['weight']==1 else 'marks allocated to this check.')))
+        seen=set();seen_issues=set()
         for c in row['checks']:
-            if c['passed'] is not False or c.get('accepted'):continue
+            if not c.get('scored',True) or c['passed'] is not False or c.get('accepted'):continue
+            issues=set(c.get('issues',[]))
+            if issues and issues<=seen_issues:continue
+            seen_issues.update(issues)
             message=explanation(row['criterion'],c)
             if message in seen:continue
             seen.add(message)

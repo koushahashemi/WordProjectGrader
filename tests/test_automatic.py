@@ -174,13 +174,13 @@ def test_figure_list_is_not_main_toc(compliant):
             if f.get(W+'instr','').startswith('TOC \\o'):f.set(W+'instr','HYPERLINK "example"')
     r=grade(mutate(compliant,change),'bad.docx')
     # The heading list remains as a manually created TOC: it can earn partial, not full, credit.
-    assert row(r,'Table of Contents (TOC)')['score']==3
+    assert row(r,'Table of Contents (TOC)')['score']==4
     assert row(r,'Table of Contents (TOC)')['checks'][0]['passed'] is False
     assert row(r,'List of Figures')['score']==5
 
 
-@pytest.mark.parametrize('apa,updated,expected',[(True,True,5),(False,True,3),(True,False,1),(False,False,0)])
-def test_exact_citation_rubric_levels(compliant,apa,updated,expected):
+@pytest.mark.parametrize('apa,updated,expected',[(True,True,5),(False,True,4),(True,False,4),(False,False,3)])
+def test_citation_distinct_error_deductions(compliant,apa,updated,expected):
     def change(roots):
         sources=roots['customXml/item1.xml']
         if not apa:sources.set('SelectedStyle','MLASeventhEditionOfficeOnline.xsl');sources.set('StyleName','MLA');sources.set('Version','7')
@@ -234,7 +234,7 @@ def test_manual_toc_gets_partial_credit_not_missing(compliant):
                 for child in list(f):parent.append(child)
                 parent.remove(f)
     r=grade(mutate(compliant,change),'typed.docx')
-    assert row(r,'Table of Contents (TOC)')['score']==3
+    assert row(r,'Table of Contents (TOC)')['score']==4
 
 
 def test_typed_title_cover_gets_rubric_partial_credit(compliant):
@@ -244,7 +244,7 @@ def test_typed_title_cover_gets_rubric_partial_credit(compliant):
         for child in list(f):parent.append(child)
         parent.remove(f)
     data=mutate(compliant,change)
-    assert row(grade(data,'typed.docx',calibrated=False),'Title Page')['score']==1
+    assert row(grade(data,'typed.docx',calibrated=False),'Title Page')['score']==4
     assert row(grade(data,'typed.docx'),'Title Page')['score']==5
 
 

@@ -1,11 +1,12 @@
-## Bears Grader 2.2.0
+## Bears Grader 3.0.0
 
-- New Feedback on lost marks tab and batch feedback export: plain-language explanations linked to the instructions and style guide.
-- Page Numbers now uses the instructor's four-category deduction rule. Repeated font errors lose one mark total; all four failed categories receive 0/5.
-- Captions now have three visible scoring groups: presence (2 marks), placement (1), and formatting/style (2).
-- Accepts TOCHeading for the figures-list heading, punctuation/spacing differences and small spelling errors.
-- Fixes hanging-indent calculations and measurement rounding. Accepts the instructor-approved 1.25-inch side margins.
-- Displays font sizes in points; recognizes Mac-style font-face names and block-level document-title controls.
-- Section-break and references-numbering rules are unchanged. The original full-mark benchmark still scores 60/60.
+- Double-click submission filenames to open the exact original file in the default application. Same-named files from different folders remain distinct; missing originals show a clear error.
+- Headings now has five equal one-mark groups: Title, Heading 1, Heading 2, Heading 3 style formatting, and Heading 1–3 application to text.
+- Applying Title style to the cover is evaluated only under Title Page. Branding Consistency covers layout/margins, without repeated typography deductions.
+- One distinct simple error receives 4/5. Repeated or inherited failures are grouped; shared errors owned by another rubric criterion are informational.
+- A page break is sufficient after the cover. A footer-free cover followed by a correctly numbered page 2 is accepted, including continued numbering.
+- Previous caption and four-category footer scoring, plain-language feedback, Word compatibility and text-matching improvements are retained. Existing references-section checks remain.
 
-Download BearsGrader.exe and replace the previous executable. No Python or browser is required. Student submissions and personal details are not included. Exact rendered pagination and sentence-context judgment remain XML-only limitations.
+The full-mark instructor benchmark remains 60/60. Student submissions and personal data are not bundled. Exact rendered pagination and contextual sentence quality remain XML-only limitations.
+
+Download BearsGrader.exe and replace the previous executable. No Python or browser is required.
