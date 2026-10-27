@@ -1,14 +1,14 @@
 @echo off
 setlocal
 cd /d "%~dp0"
-echo Building BearsGrader.exe. Python 3.12 must be installed.
+echo Building BCIT Word Project Grader (BearsGrader.exe). Python 3.12 must be installed.
 py -3.12 -m venv .venv-build
 if errorlevel 1 goto failed
 ".venv-build\Scripts\python.exe" -m pip install -r requirements-build.txt
 if errorlevel 1 goto failed
 ".venv-build\Scripts\python.exe" -m pytest -q
 if errorlevel 1 goto failed
-".venv-build\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name BearsGrader --add-data "assets;assets" desktop.py
+".venv-build\Scripts\python.exe" -m PyInstaller --noconfirm --clean --onefile --windowed --name BearsGrader --collect-all tkinterdnd2 --add-data "assets;assets" desktop.py
 if errorlevel 1 goto failed
 ".venv-build\Scripts\python.exe" desktop.py --self-test --output desktop-smoke.json
 if errorlevel 1 goto failed

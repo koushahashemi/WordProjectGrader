@@ -9,9 +9,10 @@ import re
 from lxml import etree as ET
 from grader import BASE, CRITERIA, NS, W, package, xml
 from branding import assess_brand
+from app_info import APP_TITLE, COURSE_NAME, TERM, COURSE_TEXT
 from matching import canonical, same_text, near, twips, inches, points, font_family, describe_format
 
-VERSION = '3.0.1'
+VERSION = '3.1.0'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -128,7 +129,8 @@ class Document:
         return color.upper() if color else None
 
     def format(self, sid, p=None, run=None):
-        result = {'font':None, 'size':None, 'color':None, 'italic':False}
+        result = {'font':None, 'size':None, 'color':None, 'italic':False, 'bold':False}
+        face_bold=False
         for layer in self.layers(sid, p, run):
             fonts = layer.find('w:rFonts', NS)
             if fonts is not None:
@@ -139,7 +141,9 @@ class Document:
                     family = 'majorFont' if theme.startswith('major') else 'minorFont'
                     latin = self.theme.find('.//'+A+family+'/'+A+'latin')
                     font = latin.get('typeface') if latin is not None else None
-                if theme or font: result['font'] = font
+                if theme or font:
+                    result['font'] = font
+                    face_bold=bool(re.search(r'bold|demi',font or '',re.I))
             size = layer.find('w:sz', NS)
             if size is not None: result['size'] = size.get(W+'val')
             color = layer.find('w:color', NS)
@@ -150,12 +154,18 @@ class Document:
                 is_style = layer.getparent() is not None and layer.getparent().tag == W+'style'
                 if is_style and enabled(italic): result['italic'] = not result['italic']
                 elif not is_style: result['italic'] = enabled(italic)
+            bold=layer.find('w:b',NS)
+            if bold is not None:
+                is_style=layer.getparent() is not None and layer.getparent().tag==W+'style'
+                if is_style and enabled(bold):result['bold']=not result['bold']
+                elif not is_style:result['bold']=enabled(bold)
+        result['bold']=result['bold'] or face_bold
         result['font'],face_italic=font_family(result['font'])
         result['italic']=result['italic'] or face_italic
         return result
 
     def format_origin(self,sid,prop,run=None):
-        tag={'font':'rFonts','size':'sz','color':'color','italic':'i'}[prop]
+        tag={'font':'rFonts','size':'sz','color':'color','italic':'i','bold':'b'}[prop]
         origin=self.sid('Normal')
         for style in self.chain(sid):
             if style.find('w:rPr/w:'+tag,NS) is not None:origin=style.get(W+'styleId')
@@ -260,10 +270,11 @@ class Scorer:
     def check(self, name, passed, expected, found, p=None):
         return Check(name, passed, expected, str(found), self.d.location(p) if p is not None else 'Document')
 
-    def formatting(self, sid, size, color, p=None, italic=None, direct_only=False):
+    def formatting(self, sid, size, color, p=None, italic=None, direct_only=False, bold=None):
         sid = self.d.sid(sid)
         expected = {'font':'Segoe UI','size':str(size*2),'color':color}
         if italic is not None: expected['italic'] = italic
+        if bold is not None:expected['bold']=bold
         f = self.d.format(sid, p)
         def owner(origin,prop):
             references={self.d.sid('Normal'):({'font':'Segoe UI','size':'22','color':GRAY},CRITERIA[1])}
@@ -444,6 +455,8 @@ def grade(data, filename, calibrated=True):
     main_tocs=[f for f in tocs if f not in figures_lists]
     for criterion,found,isfig in [(CRITERIA[3],main_tocs,False),(CRITERIA[5],figures_lists,True)]:
         s.area=criterion
+        toc_title_evidence=[]
+        plausible=[]
         checks=[ck('Automatic Word field',bool(found),'TOC field with figure switch' if isfig else 'TOC heading field', [f['code'] for f in found] or 'Missing')]
         if found:
             f=found[0]; first=f['p']
@@ -463,11 +476,13 @@ def grade(data, filename, calibrated=True):
                 if titles: checks.append(ck('List title style',d.pstyle(titles[-1]) in (d.sid('Heading1'),d.sid('TOCHeading')),'Heading1 or TOCHeading',d.pstyle(titles[-1]),titles[-1]))
             else:
                 titles=[p for p in d.ps[:d.index.get(first,0)+1] if text(p).casefold() in ('contents','table of contents')]
-                checks.append(ck('TOC title',bool(titles),'Contents or Table of Contents','Present' if titles else 'Missing'))
+                toc_title_evidence.append(ck('TOC title',bool(titles),'Contents or Table of Contents','Present' if titles else 'Missing'))
+                checks+=toc_title_evidence
                 if titles:
                     sid=d.pstyle(titles[-1])
                     shared=sid in [d.sid(x) for x in ('Title','Heading1','Heading2','Heading3')]
-                    checks+=s.formatting(sid,18,TEAL,titles[-1],direct_only=shared)[-1:] if shared else s.formatting(sid,18,TEAL,titles[-1])
+                    title_format=s.formatting(sid,18,TEAL,titles[-1],direct_only=shared)[-1:] if shared else s.formatting(sid,18,TEAL,titles[-1])
+                    checks+=title_format;toc_title_evidence+=title_format
             checks.append(ck('Dedicated rendered pages',None,'No unrelated content on TOC/figure-list pages','XML does not reliably encode rendered pagination or identify the exact Word gallery preset.'))
         fallback_score=None
         if not found:
@@ -488,7 +503,20 @@ def grade(data, filename, calibrated=True):
                     fallback_score=None if good else 1
                 else:fallback_score=1
             else:fallback_score=0
-        s.row(criterion,checks,fallback_score,('Manual list: one mark is lost for a missing automatic field when entries are otherwise correct; 1 if entries are incomplete; 0 if absent.' if not found else ''))
+        if isfig:
+            s.row(criterion,checks,fallback_score,('Manual list: one mark is lost for a missing automatic field when entries are otherwise correct; 1 if entries are incomplete; 0 if absent.' if not found else ''))
+        else:
+            if not found:
+                titles=[p for p in d.ps if text(p).casefold() in ('contents','table of contents')]
+                toc_title_evidence=[ck('TOC title',bool(titles),'Contents or Table of Contents','Present' if titles else 'Missing')]
+                if titles:toc_title_evidence+=s.formatting(d.pstyle(titles[0]),18,TEAL,titles[0])
+            feature=[c for c in checks if c.name in ('Automatic Word field','Field has saved results','Dedicated rendered pages')]
+            title_ids={id(c) for c in toc_title_evidence}
+            entry=[c for c in checks if id(c) not in title_ids and (' style ' in c.name or c.name=='Manual entry formatting')]
+            structure=[c for c in checks if c.name in ('Generated entry styles applied','Leader dots','Manually created list content')]
+            if not entry:entry=[ck('TOC entry typography',False,'Segoe UI, 11 pt, Dark Gray','No recognizable entries to format')]
+            if not structure:structure=[ck('TOC entry structure',False,'Entries with correct structure and leader dots','No recognizable entries')]
+            s.grouped_row(criterion,[('Automatic TOC with saved entries',2,feature),('TOC title and formatting',1,toc_title_evidence),('TOC entry typography',1,entry),('Entry structure and leader dots',1,structure)],'Four groups: real automatic TOC with saved entries (2), title/formatting (1), entry typography (1), and entry structure/leader dots (1). Repeated font/size errors across TOC levels affect only typography; unverified pagination does not deduct marks.')
 
     s.area=CRITERIA[4]
     seq=d.fields(r'^\s*SEQ\s+Figure\b')
@@ -496,18 +524,19 @@ def grade(data, filename, calibrated=True):
     figure_count=len(d.doc.xpath('//w:drawing | //w:pict',namespaces=NS))
     presence.append(ck('Four figures present',figure_count>=4,'At least four figures',f'{figure_count} figures'))
     expected_titles=['Brown bear in its natural environment.','Grizzly bear with her cubs.','Life Cycle of a Polar Bear','Polar bear resting on Arctic ice.']
-    placement=[];formatting=s.formatting('Caption',10,GRAY,italic=True)
+    placement=[];formatting=s.formatting('Caption',10,GRAY,italic=True,bold=False)
     matched=[]
     def caption_content(value):
-        return re.sub(r'^\s*Figure\s*\d+\s*[:.\-–]?\s*','',value,flags=re.I)
+        return re.sub(r'^\s*(?:Figure\s*)?\d+\s*[:.\-–]?\s*','',value,flags=re.I)
     for title in expected_titles:
-        matches=[f for f in seq if same_text(caption_content(text(f['p'])),title)]
+        matches=[f for f in seq if same_text(caption_content(text(f['p'])),title) or canonical(text(f['p'])).endswith(canonical(title))]
         presence.append(ck('Original caption text',bool(matches),title,'Found (punctuation/spacing/minor spelling differences ignored)' if matches else 'Missing or substantially changed'))
         for f in matches[:1]:
             p=f['p'];matched.append(p)
             applied=any(n.get(W+'styleId')==d.sid('Caption') for n in d.chain(d.pstyle(p)))
             formatting.append(ck('Caption style applied',applied,'Caption or a style based on Caption',d.pstyle(p),p))
-            formatting+=s.formatting('Caption',10,GRAY,p,True)[-1:]
+            formatting+=s.formatting('Caption',10,GRAY,p,True,bold=False)[-1:]
+            formatting.append(ck('Figure label shown',bool(re.match(r'^\s*Figure(?:\b|(?=\d))',text(p),re.I)),'Figure label before caption number','Present' if re.match(r'^\s*Figure(?:\b|(?=\d))',text(p),re.I) else 'Missing Figure label',p))
             alignment=d.prop(d.pstyle(p),'jc',p=p,kind='pPr') or 'left (default)'
             formatting.append(ck('Caption alignment',True,'No specific alignment is prescribed by the supplied guide',alignment,p))
             index=d.index.get(p,-1)
@@ -582,7 +611,9 @@ def grade(data, filename, calibrated=True):
         m=re.match(r'\s*CITATION\s+(?:"([^"]+)"|(\S+))',f['code'],re.I)
         if not m or (m.group(1) or m.group(2)) not in source_tags: unresolved.append(f['code'])
     checks.append(ck('Citation sources resolved',not unresolved,'Every citation tag resolves to a saved source',unresolved or 'All resolved'))
-    s.row(CRITERIA[7],checks,0 if not citation_fields else None)
+    s.grouped_row(CRITERIA[7],[('Word in-text citations present',2,[checks[0]]),('APA 6 citation style',1,[checks[1]]),('First source book details',1,source_checks[:-1]),('First source author and source links',1,[source_checks[-1],checks[-1]])],'Credit is retained for existing Word citations (2), APA 6 style (1), first-source book details (1), and author/source links (1). Wrong style or incomplete source data does not erase presence credit.')
+    if not citation_fields:
+        s.rows[-1]['score']=0;s.rows[-1]['strict_score']=0
 
     s.area=CRITERIA[8]
     bibliography=d.fields(r'^\s*BIBLIOGRAPHY\b')
@@ -735,7 +766,7 @@ def grade(data, filename, calibrated=True):
             extra=text(paragraph); sentence_note='Original paragraph changed; appended sentence could not be isolated.'
     sentence={'text':extra,'word_count':count,'finding':sentence_note,'context':'Context appropriateness is not determined by deterministic checks. No separate points are assigned by the rubric.'}
     s.rows.sort(key=lambda row:CRITERIA.index(row['criterion']))
-    return {'filename':filename,'version':VERSION,'total':sum(r['score'] for r in s.rows),'maximum':60,'strict_total':sum(r['strict_score'] for r in s.rows),
+    return {'filename':filename,'application':APP_TITLE,'course':COURSE_NAME,'term':TERM,'version':VERSION,'total':sum(r['score'] for r in s.rows),'maximum':60,'strict_total':sum(r['strict_score'] for r in s.rows),
             'scoring_mode':'Teacher calibrated' if calibrated else 'Written requirements',
             'estimated':any(r['estimated'] for r in s.rows),'criteria':s.rows,'sentence':sentence,
             'limitations':['Scores use the documented deterministic rubric mapping; qualitative partial-credit boundaries are implementation policy, not extra instructions from the rubric.', 'Page isolation, exact rendering, identity of student-information lines and sentence context cannot be established fully from OOXML. Scores involving those checks are marked estimated.']}
@@ -769,7 +800,7 @@ def csv_report(results):
 
 def detail_text(result):
     if 'error' in result: return result['filename']+'\n'+result['error']
-    lines=[f'{result["filename"]}: {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''),f'Engine {result["version"]}',f'Scoring: {result.get("scoring_mode","Automatic")}; written-requirement diagnostic total: {result.get("strict_total",result["total"])} / 60','']
+    lines=[APP_TITLE,COURSE_TEXT,f'{result["filename"]}: {result["total"]}/60'+(' (estimated)' if result['estimated'] else ''),f'Engine {result["version"]}',f'Scoring: {result.get("scoring_mode","Automatic")}; written-requirement diagnostic total: {result.get("strict_total",result["total"])} / 60','']
     for row in result['criteria']:
         lines += [f'{row["criterion"]}: {row["score"]}/5',row['policy']]
         for c in row['checks']:

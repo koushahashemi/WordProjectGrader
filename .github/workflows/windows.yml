@@ -25,7 +25,7 @@ jobs:
           python -m pytest -q
           python desktop.py --self-test --output desktop-smoke.json
       - name: Build standalone executable
-        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name BearsGrader --add-data "assets;assets" desktop.py
+        run: python -m PyInstaller --noconfirm --clean --onefile --windowed --name BearsGrader --collect-all tkinterdnd2 --add-data "assets;assets" desktop.py
       - name: Test packaged executable and bundled baseline
         shell: pwsh
         run: |
@@ -35,6 +35,7 @@ jobs:
           if (-not (Test-Path packaged-smoke.json)) { throw 'Self-test result missing' }
           $result = Get-Content packaged-smoke.json | ConvertFrom-Json
           if (-not $result.ok) { throw 'Packaged app did not pass' }
+          if (-not $result.drag_drop) { throw 'Packaged drag-and-drop validation missing' }
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:

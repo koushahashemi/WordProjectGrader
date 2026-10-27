@@ -135,6 +135,7 @@ def test_baseline_auto_scores_without_manual_input():
     assert all(isinstance(q['score'],int) and 0<=q['score']<=5 for q in r['criteria'])
     assert r['total']==sum(q['score'] for q in r['criteria'])
     for name in ['Title Page','Table of Contents (TOC)','Figures and Captions','List of Figures','Bibliography / References','Page Numbers','Section Break and Page Numbering']:assert row(r,name)['score']==0
+    assert row(r,'Citations (In-text)')['score']==2
 
 
 def test_compliant_structure_scores_full_with_explicit_layout_limits(compliant):
@@ -174,7 +175,7 @@ def test_figure_list_is_not_main_toc(compliant):
             if f.get(W+'instr','').startswith('TOC \\o'):f.set(W+'instr','HYPERLINK "example"')
     r=grade(mutate(compliant,change),'bad.docx')
     # The heading list remains as a manually created TOC: it can earn partial, not full, credit.
-    assert row(r,'Table of Contents (TOC)')['score']==4
+    assert row(r,'Table of Contents (TOC)')['score']==3
     assert row(r,'Table of Contents (TOC)')['checks'][0]['passed'] is False
     assert row(r,'List of Figures')['score']==5
 
@@ -234,7 +235,7 @@ def test_manual_toc_gets_partial_credit_not_missing(compliant):
                 for child in list(f):parent.append(child)
                 parent.remove(f)
     r=grade(mutate(compliant,change),'typed.docx')
-    assert row(r,'Table of Contents (TOC)')['score']==4
+    assert row(r,'Table of Contents (TOC)')['score']==3
 
 
 def test_typed_title_cover_gets_rubric_partial_credit(compliant):

@@ -1,16 +1,16 @@
-# Bears Assignment Grader 3.0.1
+# BCIT Word Project Grader 3.1.0
 
-A native Windows desktop app that automatically grades the **Word Project 2026 / Together for Bears** assignment. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.
+An instructor grading tool for **BCIT BSYS 1000 — Word Project, Fall 2026**, using the Together for Bears assignment. Grade Word Project submissions individually or in batches, review rubric scores, and export feedback. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.
 
 ## Windows executable
 
-Open **Releases**, download **BearsGrader.exe** from version 3.0.1, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
+Open **Releases**, download **BearsGrader.exe** from version 3.1.0, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
 
 GitHub Actions builds and tests the executable on Windows, including an actual desktop self-test and the embedded assignment assets, before publishing tagged releases. If a build fails, no new executable is published; inspect the Actions tab.
 
 ## Use
 
-1. Choose **Add Word files...** for multiple submissions, or **Add folder...** for the `.docx` files directly inside a folder.
+1. **Drag and drop one or multiple `.docx` files anywhere in the app window**, or choose **Add Word files...** / **Add folder...**. Spaces and Unicode in filenames are supported. Drops during grading are queued. Non-Word files, folders and Word temporary lock files are ignored. Adding the same original again creates a new row.
 2. Each file is scored automatically. Scroll the batch table horizontally for all criteria.
 3. **Double-click a filename** to open that exact original submission in the default Word-document application. Enter also opens the selected file. Same-named files from different folders retain their individual paths. Moved or deleted files produce an error message rather than opening a different submission.
 4. Select a submission for its rubric table. **Feedback on lost marks** explains deductions in ordinary language with references to the instructions/style guide; **Technical details** contains the audit trail and scoring groups.
@@ -45,7 +45,9 @@ The default feedback gives one overall conclusion and identifies the weak areas.
 
 - **General criteria:** start at 5 and deduct one mark per distinct failed item/property, down to 0. One simple error gives **4/5**, not an automatic jump to 3. Missing primary features, such as no TOC or no references section, can still receive 0. Citation source fields and APA style use this same distinct-error rule; the old 5/3/1/0-only bands are no longer used.
 - **Headings:** five equal one-mark groups as listed above. Repeating a wrong heading assignment does not multiply the one-mark application-group deduction. Applying Title style to the cover is evaluated only under Title Page.
-- **Figures and Captions:** presence of four captions (2), placement above figures (1), formatting/style (2). Repeated failures stay within their group. Missing captions affect presence; placement/style are evaluated on the captions that exist. The supplied guide does not prescribe caption alignment, so observed alignment is reported without an invented alignment deduction.
+- **Table of Contents:** automatic Word TOC with saved entries (2), title/formatting (1), entry typography (1), structure/leader dots (1). Repeated wrong fonts/sizes across TOC1–3 affect only typography. A manually typed contents list can retain the other three marks. Unverified pagination does not deduct marks.
+- **In-text citations:** Word citation presence (2), APA 6 style (1), first-source book details (1), first-source author and source links (1). An empty source placeholder loses source credit while existing citations and a correct APA setting retain credit. No recognizable citation fields still receives 0.
+- **Figures and Captions:** presence of four captions (2), placement above figures (1), formatting/style (2). Repeated failures stay within their group. Real SEQ Figure fields identify captions even when the visible Figure label is missing or wrong. Label and bold/non-italic errors affect only formatting. Missing captions affect presence; placement/style are evaluated on the captions that exist. The supplied guide does not prescribe caption alignment, so observed alignment is reported without an invented alignment deduction.
 - **Page Numbers:** four categories—font/size/style; right alignment; title page counted as 1 with number hidden; PAGE and Document Title features. Start at 5, deduct 1 per failed category, and award 0 if all four fail.
 
 A **page break is sufficient after the cover**; a section break is not required there. A footer-free cover is accepted when it is followed by the correct visible footer displaying page 2. The app checks a separate cover section's start/continuation metadata and its following page's active footer. An empty different-first-page footer on page 2 is not accepted. This exception does not remove the separate-section requirement before the bibliography.
@@ -83,6 +85,8 @@ python -m pytest -q
 python desktop.py
 ```
 
-Tkinter ships with normal Windows Python. Linux needs a Python Tk installation and graphical display. `python desktop.py --self-test --output desktop-smoke.json` exercises the native UI and bundled baseline. GUI tests skip when no display is available on Linux.
+Tkinter ships with normal Windows Python. Native drop support uses tkinterdnd2 and Tcl/Tk 8.6; Python 3.12 on Windows is the release build target. Linux needs Tk 8.6 and a graphical display; Tk 9 cannot load the native drop library. In this cloud checkout `.venv-tk86` uses system Python/Tk 8.6 with pinned dependencies for native GUI validation. `python desktop.py --self-test --output desktop-smoke.json` exercises the native UI and bundled baseline. GUI tests skip when no display is available on Linux.
 
-Tests cover zero/full overall-brand anchors, widespread versus isolated formatting, independence from other rubric point totals, grading ownership, equal heading groups, distinct-error 4/5 scores, repeated formatting, cover/footer variants, exact original-path opening, source metadata, captions, batch continuation, feedback exports and input validation. Limits: 15 MB per upload, 60 MB expanded ZIP size and 2,000 ZIP entries. XML external entity resolution/network access are disabled; uploaded document code is never executed by grading. Opening a file by double-click is a separate explicit action in the default application.
+Windows builds collect tkinterdnd2 resources. The packaged self-test loads the native drop library and grades a document through the drop handler before publishing. Cyclic garbage collection for GUI sessions runs on the GUI thread, avoiding Tcl cleanup in grading workers.
+
+Tests cover native drop registration/queuing/filtering, quoted Unicode paths, partial-credit TOCs/citations, missing caption labels, course branding, zero/full overall-brand anchors, widespread versus isolated formatting, independence from other rubric point totals, grading ownership, equal heading groups, distinct-error 4/5 scores, repeated formatting, cover/footer variants, exact original-path opening, source metadata, captions, batch continuation, feedback exports and input validation. Limits: 15 MB per upload, 60 MB expanded ZIP size and 2,000 ZIP entries. XML external entity resolution/network access are disabled; uploaded document code is never executed by grading. Opening a file by double-click is a separate explicit action in the default application.

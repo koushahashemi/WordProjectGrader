@@ -3,7 +3,7 @@ setlocal
 cd /d "%~dp0"
 if errorlevel 1 goto failed
 
-echo Bears Word Project Grader - Windows setup
+echo BCIT Word Project Grader - BSYS 1000 Fall 2026 - Windows setup
 echo Keep this window open while using the app.
 echo.
 if not exist "desktop.py" goto missing_files

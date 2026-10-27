@@ -1,6 +1,7 @@
 """Instructor/student feedback, distinct from the XML diagnostic audit trail."""
 import re
 from grader import CRITERIA
+from app_info import APP_TITLE, COURSE_TEXT
 
 REFERENCES={
  CRITERIA[0]:'Project Instruction 3; Brand Style Guide, Typography (section 3).',
@@ -37,6 +38,7 @@ def explanation(criterion,check):
       'List title style':'The figures-list heading needs Heading 1 or the accepted TOCHeading style.',
       'List of Figures title':'Add a heading for the figures list. “List of Figures” and “Table of Figures” are both accepted.',
       'Caption above image':'A caption is not directly above its figure. Move the caption above the corresponding picture.',
+      'Figure label shown':'The caption is missing its visible “Figure” label. Keep the Word sequence field and add the Figure label before the number. Presence and placement credit are retained.',
       'Caption style applied':'A figure caption is not using the Caption style (or a style based on it). Apply the modified Caption style.',
       'Caption text present':'There are no recognizable figure captions to evaluate. Insert Word captions for the four pictures.',
       'Four caption fields':'Not all four figures have real Word captions. Use Insert Caption for each figure; typing a label alone does not create a caption field.',
@@ -76,6 +78,8 @@ def explanation(criterion,check):
         return f'Some text overrides the required formatting. It should use {expected}.{detail} Apply the correct style and remove conflicting direct formatting.'
     if ' style ' in name:
         prop=name.rsplit(' style ',1)[1]
+        if prop=='bold':return 'The Caption style uses bold text. Turn bold off and use the required italic caption formatting.'
+        if prop=='italic':return 'The Caption style is not italic. Set captions to Segoe UI, 10 pt, italic, Dark Gray.'
         return f'The {name.rsplit(" style ",1)[0]} style has the wrong {prop}. Expected {expected}; found {found}. Modify the style itself.'
     if name=='List indentation':return f'The bullet/list position does not match the accepted indentation. {expected}. Detected {found}.'
     if re.match(r'Section \d+ (top|bottom|left|right) margin',name):return f'The {name.lower()} is {found}; the guide specifies {expected}. Adjust Layout → Margins.'
@@ -93,7 +97,7 @@ def feedback_text(result,criterion=None):
     if 'error' in result:return 'This document could not be graded: '+result['error']
     rows=[r for r in result['criteria'] if r['score']<r['maximum'] and (criterion is None or r['criterion']==criterion)]
     if not rows:return 'No marks lost'+(' for this criterion.' if criterion else ' in this submission.')
-    lines=[f'Feedback on lost marks — {result["filename"]}',f'Total: {result["total"]}/60','']
+    lines=[APP_TITLE,COURSE_TEXT,f'Feedback on lost marks — {result["filename"]}',f'Total: {result["total"]}/60','']
     for row in rows:
         lines += [f'{row["criterion"]}: {row["score"]}/5 ({5-row["score"]} '+('mark lost)' if 5-row['score']==1 else 'marks lost)'),REFERENCES[row['criterion']]]
         if row.get('overall_assessment'):
