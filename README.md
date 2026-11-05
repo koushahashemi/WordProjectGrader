@@ -1,3 +1,19 @@
+# Original rubric branch
+
+This variant uses only **5, 3, 1, 0** for each of the twelve rubric items.
+The full calibrated assessment runs first, including all accepted alternatives,
+partial-credit groups, tolerance rules and duplicate-error protections. Final marks
+map as follows: **5→5, 4→3, 3→3, 2→1, 1→1, 0→0**. Totals are recalculated
+from the mapped marks. Technical evidence retains the detailed score so instructors
+can explain the band. Detailed evidence weights are not additional final deductions.
+
+This variant lives on `original_rubric`; `main` keeps its existing scoring.
+Download its executable from the successful **Build Windows desktop executable**
+Actions run for `original_rubric`, under the `BearsGrader-Windows-original_rubric`
+artifact. The installer and source build scripts also work from this branch.
+
+---
+
 # BCIT Word Project Grader 3.1.0
 
 An instructor grading tool for **BCIT BSYS 1000 — Word Project, Fall 2026**, using the Together for Bears assignment. Grade Word Project submissions individually or in batches, review rubric scores, and export feedback. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.

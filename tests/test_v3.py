@@ -5,7 +5,7 @@ import sys
 import tkinter as tk
 from unittest.mock import patch
 import pytest
-from autograder import grade, grade_paths, NS, W, CRITERIA
+from autograder import grade_detailed as grade, grade_paths, NS, W, CRITERIA
 from grader import BASE
 from feedback import feedback_text
 from test_automatic import compliant, mutate, setprop, node, ensure, paragraph

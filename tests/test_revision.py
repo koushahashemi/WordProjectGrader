@@ -2,7 +2,7 @@ import re
 from pathlib import Path
 import pytest
 from lxml import etree as E
-from autograder import grade, Document, NS, W, CRITERIA
+from autograder import grade_detailed as grade, Document, NS, W, CRITERIA
 from matching import same_text, twips, near, font_family
 from feedback import feedback_text
 from test_automatic import compliant, mutate, row, setprop, ensure, node

@@ -105,7 +105,7 @@ class GraderApp:
         self.views.add(self.feedback,text='Feedback on lost marks')
         self.views.add(self.details,text='Technical details')
         split.add(self.views,weight=2)
-        ttk.Label(outer,text='Teacher-calibrated scores. ACCEPTED notes explain benchmark alternatives. Estimated = XML cannot verify every layout requirement.',wraplength=1150).pack(anchor='w',pady=(10,0))
+        ttk.Label(outer,text='Original rubric scores: 5, 3, 1, 0. ACCEPTED notes explain benchmark alternatives. Estimated = XML cannot verify every layout requirement.',wraplength=1150).pack(anchor='w',pady=(10,0))
         self.drop_enabled=False
         if hasattr(root,'TkdndVersion'):self.enable_file_drop()
         root.bind('<Destroy>',self.on_window_destroy,add='+')

@@ -1,7 +1,7 @@
 name: Build Windows desktop executable
 on:
   push:
-    branches: [main]
+    branches: [main, original_rubric]
     tags: ['v*']
   workflow_dispatch:
 permissions:
@@ -39,7 +39,7 @@ jobs:
       - name: Upload Windows app
         uses: actions/upload-artifact@v4
         with:
-          name: BearsGrader-Windows
+          name: BearsGrader-Windows-${{ github.ref_name }}
           path: dist/BearsGrader.exe
           if-no-files-found: error
       - name: Publish executable for tagged versions

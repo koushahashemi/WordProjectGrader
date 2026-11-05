@@ -12,7 +12,7 @@ from branding import assess_brand
 from app_info import APP_TITLE, COURSE_NAME, TERM, COURSE_TEXT
 from matching import canonical, same_text, near, twips, inches, points, font_family, describe_format
 
-VERSION = '3.1.0'
+VERSION = '3.1.0-original-rubric'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -358,7 +358,7 @@ class Scorer:
         self.rows[-1]['scoring_groups']=summaries
 
 
-def grade(data, filename, calibrated=True):
+def grade_detailed(data, filename, calibrated=True):
     d = Document(data); s = Scorer(d,calibrated); ck = s.check
     original = Document(BASE.read_bytes())
     expected_headings = [(text(p),original.pstyle(p)) for p in original.ps if original.pstyle(p) in [original.sid(x) for x in ('Heading1','Heading2','Heading3')]]
@@ -770,6 +770,26 @@ def grade(data, filename, calibrated=True):
             'scoring_mode':'Teacher calibrated' if calibrated else 'Written requirements',
             'estimated':any(r['estimated'] for r in s.rows),'criteria':s.rows,'sentence':sentence,
             'limitations':['Scores use the documented deterministic rubric mapping; qualitative partial-credit boundaries are implementation policy, not extra instructions from the rubric.', 'Page isolation, exact rendering, identity of student-information lines and sentence context cannot be established fully from OOXML. Scores involving those checks are marked estimated.']}
+
+
+ORIGINAL_RUBRIC_BANDS = {5: 5, 4: 3, 3: 3, 2: 1, 1: 1, 0: 0}
+BAND_POLICY = ('Original rubric bands: detailed scores 5→5, 4→3, 3→3, 2→1, 1→1, 0→0. '
+               'Accepted alternatives and distinct-error checks are preserved; evidence weights explain the detailed assessment before band conversion.')
+
+
+def grade(data, filename, calibrated=True):
+    """Apply the coworker rubric bands after the complete calibrated assessment."""
+    result = grade_detailed(data, filename, calibrated)
+    for row in result['criteria']:
+        row['detailed_score'] = row['score']
+        row['detailed_strict_score'] = row['strict_score']
+        row['score'] = ORIGINAL_RUBRIC_BANDS[row['score']]
+        row['strict_score'] = ORIGINAL_RUBRIC_BANDS[row['strict_score']]
+        row['policy'] = BAND_POLICY + ' ' + row['policy']
+    result['total'] = sum(row['score'] for row in result['criteria'])
+    result['strict_total'] = sum(row['strict_score'] for row in result['criteria'])
+    result['scoring_mode'] += ' — original rubric (5, 3, 1, 0)'
+    return result
 
 
 def grade_paths(paths):

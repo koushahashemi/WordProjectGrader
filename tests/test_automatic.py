@@ -5,7 +5,7 @@ from pathlib import Path
 from zipfile import ZipFile
 import pytest
 from lxml import etree as E
-from autograder import Document, grade, grade_paths, csv_report, CRITERIA, W, NS
+from autograder import Document, grade_detailed as grade, grade_paths, csv_report, CRITERIA, W, NS
 from grader import BASE, package, xml
 
 

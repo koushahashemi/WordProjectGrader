@@ -100,11 +100,13 @@ def feedback_text(result,criterion=None):
     lines=[APP_TITLE,COURSE_TEXT,f'Feedback on lost marks — {result["filename"]}',f'Total: {result["total"]}/60','']
     for row in rows:
         lines += [f'{row["criterion"]}: {row["score"]}/5 ({5-row["score"]} '+('mark lost)' if 5-row['score']==1 else 'marks lost)'),REFERENCES[row['criterion']]]
+        if 'detailed_score' in row:
+            lines.append(f"Original rubric band: {row['detailed_score']}/5 detailed assessment → {row['score']}/5. Allowed marks: 5, 3, 1, 0.")
         if row.get('overall_assessment'):
             lines.append('This is one overall style-guide assessment; the domain evidence is not a list of separate mark deductions.')
         if row.get('scoring_groups'):
             for g in row['scoring_groups']:
-                if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} '+('mark allocated to this check.' if g['weight']==1 else 'marks allocated to this check.')))
+                if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('Detailed evidence only; the final mark uses the original rubric band.' if 'detailed_score' in row else 'One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} '+('mark allocated to this check.' if g['weight']==1 else 'marks allocated to this check.')))
         seen=set();seen_issues=set()
         for c in row['checks']:
             if not c.get('scored',True) or c['passed'] is not False or c.get('accepted'):continue

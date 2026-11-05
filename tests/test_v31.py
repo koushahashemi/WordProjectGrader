@@ -7,7 +7,7 @@ import tkinter as tk
 from unittest.mock import patch
 import pytest
 from tkinterdnd2 import TkinterDnD, COPY, REFUSE_DROP
-from autograder import grade, NS, W, CRITERIA
+from autograder import grade_detailed as grade, NS, W, CRITERIA
 from grader import BASE
 from test_automatic import compliant, mutate, setprop, paragraph, node
 

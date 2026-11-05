@@ -2,7 +2,7 @@ from io import BytesIO
 from zipfile import ZipFile, ZIP_DEFLATED
 import pytest
 from grader import package, xml, fields
-from autograder import grade
+from autograder import grade_detailed as grade
 
 
 def test_invalid_archive_and_missing_document():

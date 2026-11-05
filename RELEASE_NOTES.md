@@ -1,3 +1,13 @@
+# Original rubric variant
+
+Separate `original_rubric` branch; main scoring is unchanged.
+Each rubric item awards only 5, 3, 1 or 0. Detailed scores map 5→5,
+4→3, 3→3, 2→1, 1→1, 0→0. Existing calibration, accepted alternatives,
+partial-credit evidence, duplicate-error handling and batch features are retained.
+Reports explain the band conversion; totals use the converted item scores.
+
+---
+
 ## BCIT Word Project Grader 3.1.0
 ### BSYS 1000 | Fall 2026 | Instructor Grading Tool
 

@@ -1,6 +1,6 @@
 from copy import deepcopy
 import pytest
-from autograder import grade, NS, W, CRITERIA
+from autograder import grade_detailed as grade, NS, W, CRITERIA
 from branding import assess_brand
 from feedback import feedback_text
 from test_automatic import compliant, mutate, setprop
