@@ -1,3 +1,10 @@
+# File Name Trimmer branch
+
+The new standalone Windows app is in [file-name-trimmer](file-name-trimmer/README.md).
+Download this branch as a ZIP, extract it, and run **file-name-trimmer/File Name Trimmer.bat**.
+
+---
+
 # BCIT Word Project Grader 3.1.0
 
 An instructor grading tool for **BCIT BSYS 1000 — Word Project, Fall 2026**, using the Together for Bears assignment. Grade Word Project submissions individually or in batches, review rubric scores, and export feedback. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.

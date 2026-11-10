@@ -1,0 +1,44 @@
+name: File Name Trimmer Windows
+on:
+  push:
+    branches: [file-name-trimmer]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify rename rules and overwrite protection
+        shell: powershell
+        run: .\file-name-trimmer\FileNameTrimmer.ps1 -SelfTest
+      - name: Verify Windows interface
+        shell: powershell
+        run: .\file-name-trimmer\FileNameTrimmer.ps1 -GuiSmokeTest
+      - name: Upload Windows app
+        uses: actions/upload-artifact@v4
+        with:
+          name: FileNameTrimmer-Windows
+          path: |
+            file-name-trimmer/File Name Trimmer.bat
+            file-name-trimmer/FileNameTrimmer.ps1
+            file-name-trimmer/README.md
+      - name: Record build outcome
+        if: always()
+        shell: pwsh
+        env:
+          BUILD_STATUS: ${{ job.status }}
+          BUILD_COMMIT: ${{ github.sha }}
+          BUILD_REF: ${{ github.ref }}
+        run: |
+          @{ status=$env:BUILD_STATUS; commit=$env:BUILD_COMMIT; ref=$env:BUILD_REF; run=$env:GITHUB_RUN_ID; attempt=$env:GITHUB_RUN_ATTEMPT } | ConvertTo-Json | Set-Content -Encoding utf8 build-result.json
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          $blob = git hash-object -w build-result.json
+          git update-index --add --cacheinfo "100644,$blob,build-result.json"
+          $tree = git write-tree
+          $commit = git commit-tree $tree -p HEAD -m 'Record File Name Trimmer Windows checks'
+          git push origin "${commit}:refs/heads/build-results/file-name-trimmer-$env:GITHUB_RUN_ID-$env:GITHUB_RUN_ATTEMPT"
