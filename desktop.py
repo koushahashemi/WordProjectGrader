@@ -15,7 +15,9 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from tkinter import font as tkfont
 from tkinter.scrolledtext import ScrolledText
-from autograder import VERSION, grade, grade_paths, csv_report, detail_text
+from autograder import VERSION, grade, grade_paths, csv_report, detail_text, sentence_lines
+from report import html_report
+import webbrowser
 from grader import BASE, CRITERIA
 from feedback import feedback_text
 
@@ -72,12 +74,13 @@ class GraderApp:
         ttk.Label(outer,textvariable=self.status,wraplength=1150).pack(anchor='w',pady=(0,8))
         panes=ttk.Panedwindow(outer,orient='vertical');panes.pack(fill='both',expand=True)
         batch=ttk.Frame(panes);panes.add(batch,weight=2)
-        columns=['filename','total','status',*SHORT]
+        columns=['filename','total','status','sentence',*SHORT]
         self.batch=ttk.Treeview(batch,columns=columns,show='headings',selectmode='browse',height=7)
         for col in columns:
-            self.batch.heading(col,text='Submission' if col=='filename' else 'Total /60' if col=='total' else col.title())
+            self.batch.heading(col,text='Submission' if col=='filename' else 'Total /60' if col=='total' else 'Added sentence' if col=='sentence' else col.title())
             self.batch.column(col,width=230 if col=='filename' else 105 if col=='status' else 82,minwidth=65,stretch=False,anchor='w' if col in ('filename','status') else 'center')
         self.batch.tag_configure('error',foreground='#B3261E')
+        self.batch.tag_configure('flagged',background='#FFF1C2')
         self.batch.grid(row=0,column=0,sticky='nsew')
         vs=ttk.Scrollbar(batch,orient='vertical',command=self.batch.yview);vs.grid(row=0,column=1,sticky='ns')
         self.batch.configure(yscrollcommand=vs.set)
@@ -185,9 +188,9 @@ class GraderApp:
     def add_result(self,result):
         idx=str(len(self.results));self.results.append(result)
         if 'error' in result:
-            values=[result['filename'],'-','Error',*['-']*12];tags=('error',)
+            values=[result['filename'],'-','Error','-',*['-']*12];tags=('error',)
         else:
-            values=[result['filename'],result['total'],'Estimated' if result['estimated'] else 'Scored',*[r['score'] for r in result['criteria']]];tags=()
+            values=[result['filename'],result['total'],'Estimated' if result['estimated'] else 'Scored',result.get('sentence',{}).get('flag',''),*[r['score'] for r in result['criteria']]];tags=('flagged',) if result.get('sentence',{}).get('flag')=='Yes' else ()
         self.batch.insert('','end',iid=idx,values=values,tags=tags)
         if not self.batch.selection():self.batch.selection_set(idx)
 
@@ -257,7 +260,7 @@ class GraderApp:
         for c in checks:
             label='INFO' if not c.get('scored',True) else 'ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
             lines += [f'[{label}] {c["name"]}',c['location'],f'Expected: {c["expected"]}',f'Found: {c["found"]}',('Accepted alternative: '+c['accepted']) if c.get('accepted') else '', '']
-        lines+=['ADDITIONAL SENTENCE (no separate rubric points)',json.dumps(result['sentence'],indent=2,ensure_ascii=False)]
+        lines+=sentence_lines(result['sentence'])
         self.show_text('\n'.join(lines))
         self.show_feedback(result)
 
@@ -281,12 +284,18 @@ class GraderApp:
 
     def export_report(self):
         if not self.results:messagebox.showinfo('No grades','Add documents first.');return
-        path=filedialog.asksaveasfilename(defaultextension='.txt',initialfile='BCIT_BSYS1000_Fall2026_Report.txt',filetypes=[('Detailed text report','*.txt'),('Machine-readable JSON','*.json')])
+        path=filedialog.asksaveasfilename(defaultextension='.html',initialfile='BCIT_BSYS1000_Fall2026_Report.html',filetypes=[('Formatted report (opens in browser)','*.html'),('Detailed text report','*.txt'),('Machine-readable JSON','*.json')])
         if path:
+            suffix=Path(path).suffix.lower()
             try:
-                content=json.dumps(self.results,indent=2,ensure_ascii=False) if Path(path).suffix.lower()=='.json' else '\n\n'+'\n\n'.join(detail_text(r) for r in self.results)
+                if suffix=='.json':content=json.dumps(self.results,indent=2,ensure_ascii=False)
+                elif suffix in ('.html','.htm'):content=html_report(self.results)
+                else:content='\n\n'+'\n\n'.join(detail_text(r) for r in self.results)
                 Path(path).write_text(content,encoding='utf-8')
-            except OSError as exc:messagebox.showerror('Export failed',str(exc))
+            except OSError as exc:messagebox.showerror('Export failed',str(exc));return
+            if suffix in ('.html','.htm'):
+                try:webbrowser.open(Path(path).resolve().as_uri())
+                except Exception:pass
 
 
 def main():
@@ -306,6 +315,7 @@ def main():
         assert not app.busy and len(app.results)==1
         result=app.results[0]
         assert 'error' not in result and len(result['criteria'])==12 and result['maximum']==60
+        assert 'Class summary' in html_report([result])
         app.select_submission();root.update();root.destroy();app=None;root=None;gc.collect()
         if gc_was_enabled:gc.enable()
         if args.output:args.output.write_text(json.dumps({'ok':True,'total':result['total'],'criteria':12,'drag_drop':True}),encoding='utf-8')

@@ -37,13 +37,17 @@ def test_native_batch_scores_deductions_and_exports(tmp_path):
         assert '0/5' in details and '[FAIL]' in details and 'Missing' in details
         assert len(app.views.tabs())==2
         assert 'Project Instruction 6' in app.feedback.get('1.0','end')
-        for name,method in [('feedback.txt',app.export_feedback),('grades.csv',app.export_csv),('report.txt',app.export_report),('report.json',app.export_report)]:
+        for name,method in [('feedback.txt',app.export_feedback),('grades.csv',app.export_csv),('report.txt',app.export_report),('report.json',app.export_report),('report.html',app.export_report)]:
             target=tmp_path/name
-            with patch('desktop.filedialog.asksaveasfilename',return_value=str(target)):method()
+            with patch('desktop.filedialog.asksaveasfilename',return_value=str(target)), patch('desktop.webbrowser.open') as open_browser:
+                method()
+                if target.suffix=='.html':open_browser.assert_called_once_with(target.resolve().as_uri())
             assert target.exists()
         rows=list(csv.reader(io.StringIO((tmp_path/'grades.csv').read_text(encoding='utf-8-sig'))))
-        assert len(rows)==4 and rows[1][-3]=='9'
+        assert len(rows)==4 and rows[1][rows[0].index('Total')]=='9'
         assert len(json.loads((tmp_path/'report.json').read_text()))==3
+        assert 'Class summary' in (tmp_path/'report.html').read_text()
+        assert rows[0][-3:]==['Added sentence','Added sentence words','Added sentence text']
         app.batch.selection_set('1');root.update();app.select_submission();assert 'unable to grade' in app.selected.get()
         app.clear_batch();assert not app.results and not app.batch.get_children()
     finally:root.destroy()

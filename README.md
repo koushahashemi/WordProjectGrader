@@ -1,4 +1,15 @@
-# Original rubric branch
+# Original rubric — version 2 (2.0.0-original-rubric)
+
+Version 2 incorporates the coworker update:
+
+- Self-contained HTML reports with class summary, per-submission feedback,
+  copy-feedback buttons, printable student sections and collapsible evidence.
+  HTML is the default full-report format; text and JSON remain available.
+- Instructor-only, unscored added-sentence indicator (Yes / No / Check),
+  highlighted in the submission list and included in full reports and CSV exports.
+  It is excluded from student feedback and does not establish how work was produced.
+- Title-page information and blank lines accept Shift+Enter line breaks.
+- CSV exports append added-sentence flag, word count and text columns.
 
 This variant uses only **5, 3, 1, 0** for each of the twelve rubric items.
 The full calibrated assessment runs first, including all accepted alternatives,

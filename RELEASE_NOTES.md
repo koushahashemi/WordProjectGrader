@@ -1,10 +1,26 @@
-# Original rubric variant
+# Original rubric version 2 — 2.0.0-original-rubric
 
 Separate `original_rubric` branch; main scoring is unchanged.
 Each rubric item awards only 5, 3, 1 or 0. Detailed scores map 5→5,
 4→3, 3→3, 2→1, 1→1, 0→0. Existing calibration, accepted alternatives,
 partial-credit evidence, duplicate-error handling and batch features are retained.
 Reports explain the band conversion; totals use the converted item scores.
+
+New: formatted HTML report. "Save full report..." now defaults to an .html file that opens in
+the browser: class summary table (colour-coded scores, added-sentence flag, links to each student),
+then one section per student with marks lost and plain-language feedback first, a Copy feedback
+button, and the full evidence checks collapsed underneath. Prints one student per page. Text and
+JSON exports are still available from the same dialog.
+
+New: hidden-instruction sentence check (instructor only, not scored). Flags text added after
+the first body paragraph under "A Multifaceted Approach", either at the end of the paragraph or
+as its own paragraph. Shown as Yes / No / Check in the results list (Yes rows highlighted), in the
+detailed report, and as three new columns at the end of the grades CSV (flag, word count, text).
+Never included in student feedback.
+
+Fix: Title Page now reads the cover as displayed lines. Name, student number and set
+separated by Shift+Enter line breaks (instead of separate paragraphs) count as separate
+lines, and blank line breaks count as blank lines between them.
 
 ---
 

@@ -93,6 +93,24 @@ def explanation(criterion,check):
     return 'This part of the document does not meet the requirement. Check the cited instruction and apply the required Word feature or formatting.'
 
 
+def feedback_items(row):
+    """De-duplicated, plain-language feedback messages for one criterion's failed checks."""
+    items=[];seen=set();seen_issues=set()
+    for c in row['checks']:
+        if not c.get('scored',True) or c['passed'] is not False or c.get('accepted'):continue
+        issues=set(c.get('issues',[]))
+        if issues and issues<=seen_issues:continue
+        seen_issues.update(issues)
+        message=explanation(row['criterion'],c)
+        if message in seen:continue
+        seen.add(message)
+        location=c['location']
+        # Technical IDs and XML are never included; only meaningful paragraph locations.
+        if location.startswith('Paragraph '):message+=' Location: '+location
+        items.append(message)
+    return items
+
+
 def feedback_text(result,criterion=None):
     if 'error' in result:return 'This document could not be graded: '+result['error']
     rows=[r for r in result['criteria'] if r['score']<r['maximum'] and (criterion is None or r['criterion']==criterion)]
@@ -107,19 +125,7 @@ def feedback_text(result,criterion=None):
         if row.get('scoring_groups'):
             for g in row['scoring_groups']:
                 if not g['passed']:lines.append(f'• {g["name"]}: not met. '+('Detailed evidence only; the final mark uses the original rubric band.' if 'detailed_score' in row else 'One mark deducted.' if row['criterion']==CRITERIA[9] else f'{g["weight"]} '+('mark allocated to this check.' if g['weight']==1 else 'marks allocated to this check.')))
-        seen=set();seen_issues=set()
-        for c in row['checks']:
-            if not c.get('scored',True) or c['passed'] is not False or c.get('accepted'):continue
-            issues=set(c.get('issues',[]))
-            if issues and issues<=seen_issues:continue
-            seen_issues.update(issues)
-            message=explanation(row['criterion'],c)
-            if message in seen:continue
-            seen.add(message)
-            location=c['location']
-            # Technical IDs and XML are never included; only meaningful paragraph locations.
-            if location.startswith('Paragraph '):message+=' Location: '+location
-            lines.append('• '+message)
+        lines += ['• '+message for message in feedback_items(row)]
         if row.get('scoring_groups') and row['criterion']==CRITERIA[9] and row['score']==0:
             lines.append('All four footer checks failed, so this criterion receives 0/5.')
         lines.append('')

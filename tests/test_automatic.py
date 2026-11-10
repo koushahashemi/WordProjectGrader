@@ -365,3 +365,35 @@ def test_reference_calibration_exceptions_stay_visible(compliant):
     assert section['score']==5 and section['strict_score']<5
     assert section['accepted_variants']==3
     assert row(grade(data,'references.docx',calibrated=False),'Section Break and Page Numbering')['score']<5
+
+
+def _soft_break_cover(roots,blank_between):
+    """Rebuild the cover as Title + 'Name<br>' + 'Number<br><br>Set' (Shift+Enter lines)."""
+    body=roots['word/document.xml'].find('w:body',NS)
+    ps=body.findall('w:p',NS)
+    for p in ps[1:7]:body.remove(p)
+    def soft(*parts):
+        p=paragraph('',center=True);r=p.find('w:r',NS);r.remove(r.find('w:t',NS))
+        for part in parts:
+            if part is None:r.append(node('br'))
+            else:t=node('t');t.text=part;r.append(t)
+        return p
+    gap=[None] if blank_between else []
+    new=[paragraph('',center=True),soft('Jordan Lee',*gap),soft('12345678',None,*gap,'Set A')]
+    for i,p in enumerate(new):body.insert(1+i,p)
+
+
+def test_shift_enter_cover_lines_count_as_separate_lines(compliant):
+    data=mutate(compliant,lambda roots:_soft_break_cover(roots,True))
+    result=row(grade(data,'softbreak.docx'),'Title Page')
+    failed=[c['name'] for c in result['checks'] if c['passed'] is False]
+    assert 'Student information lines' not in failed and 'Blank lines between information' not in failed
+    assert result['score']==5
+
+
+def test_shift_enter_cover_without_blank_lines_still_loses_spacing(compliant):
+    data=mutate(compliant,lambda roots:_soft_break_cover(roots,False))
+    result=row(grade(data,'tight.docx'),'Title Page')
+    failed=[c['name'] for c in result['checks'] if c['passed'] is False]
+    assert 'Student information lines' not in failed
+    assert 'Blank lines between information' in failed and result['score']==4

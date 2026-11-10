@@ -12,7 +12,7 @@ from branding import assess_brand
 from app_info import APP_TITLE, COURSE_NAME, TERM, COURSE_TEXT
 from matching import canonical, same_text, near, twips, inches, points, font_family, describe_format
 
-VERSION = '3.1.0-original-rubric'
+VERSION = '2.0.0-original-rubric'
 A = '{http://schemas.openxmlformats.org/drawingml/2006/main}'
 R = '{http://schemas.openxmlformats.org/officeDocument/2006/relationships}'
 TEAL, GRAY, CORAL = '00796B', '4E4E4E', 'FF6F61'
@@ -24,6 +24,18 @@ def norm(text):
 
 def text(node):
     return norm(''.join(node.xpath('.//w:t/text()', namespaces=NS)))
+
+
+def visual_lines(p):
+    """Lines Word displays for one paragraph: text-wrapping breaks (Shift+Enter)
+    and carriage returns start a new line; page/column breaks do not."""
+    lines = ['']
+    for el in p.iter(W+'t', W+'br', W+'cr'):
+        if el.tag == W+'t':
+            lines[-1] += el.text or ''
+        elif el.tag == W+'cr' or el.get(W+'type') in (None, 'textWrapping'):
+            lines.append('')
+    return [norm(line) for line in lines]
 
 
 def val(node, path, default=None, attr='val'):
@@ -430,16 +442,21 @@ def grade_detailed(data, filename, calibrated=True):
             if titleps and d.page_boundary_before(p): break
             titleps.append(p)
     nonempty=[p for p in titleps if text(p)]
+    # Shift+Enter line breaks are visible lines in Word, so the cover is read as
+    # displayed lines: a paragraph split by w:br/w:cr yields several lines, and an
+    # empty segment (e.g. two breaks in a row) is a visible blank line.
+    lines=[line for p in titleps for line in visual_lines(p)]
+    filled=[i for i,line in enumerate(lines) if line]
     checks=[ck('Document Title field',titlefield is not None,'TITLE or DOCPROPERTY Title on first page',titlefield['code'] if titlefield else 'Missing')]
     if titlefield:
         checks.append(ck('Title style',d.pstyle(titlefield['p'])==d.sid('Title'),'Title',d.pstyle(titlefield['p']),titlefield['p']))
         checks += s.formatting('Title',26,TEAL,titlefield['p'],direct_only=True)[-1:]
-    checks.append(ck('Student information lines',len(nonempty)>=4,'Title plus name, student number and set',f'{len(nonempty)} nonempty paragraphs; content labels are not required'))
+    checks.append(ck('Student information lines',len(filled)>=4,'Title plus name, student number and set',f'{len(filled)} nonempty lines in {len(nonempty)} paragraphs (line breaks count as separate lines); content labels are not required'))
     for p in nonempty:
         checks.append(ck('Title page centered',d.prop(d.pstyle(p),'jc',p=p,kind='pPr')=='center','center',d.prop(d.pstyle(p),'jc',p=p,kind='pPr'),p))
         if titlefield and p is not titlefield['p']:
             checks.append(ck('Student information style',d.pstyle(p)==d.sid('Normal'),'Normal',d.pstyle(p),p))
-    checks.append(ck('Blank lines between information',len(nonempty)>=4 and all(any(not text(q) for q in titleps[titleps.index(a)+1:titleps.index(b)]) for a,b in zip(nonempty[:3],nonempty[1:4])),'Blank paragraph between title/name/number/set',f'{sum(not text(p) for p in titleps)} blank paragraphs'))
+    checks.append(ck('Blank lines between information',len(filled)>=4 and all(b-a>1 for a,b in zip(filled[:3],filled[1:4])),'Blank line between title/name/number/set (empty paragraph or line break)',f'{sum(not line for line in lines)} blank lines'))
     if not titlefield and nonempty:
         cover=nonempty[0]
         checks.append(ck('Typed cover title style',d.pstyle(cover)==d.sid('Title'),'Title',d.pstyle(cover),cover))
@@ -752,24 +769,71 @@ def grade_detailed(data, filename, calibrated=True):
     s.rows[-1]['overall_assessment']=overall
     s.rows[-1]['accepted_variants']=sum(bool(c.accepted) for c in checks)
 
-    extra=''; sentence_note='Required heading or first body paragraph not found.'; count=None
-    target=next((i for i,p in enumerate(d.ps) if same_text(text(p),'A Multifaceted Approach')),None)
-    if target is not None:
-        paragraph=next((p for p in d.ps[target+1:] if text(p)),None)
-        base='Effective bear conservation requires a multifaceted approach. Safe and tested strategies must be used.'
-        if paragraph is not None and text(paragraph).startswith(base):
-            extra=text(paragraph)[len(base):].strip()
-            count=len(re.findall(r"\b\w+(?:[’'-]\w+)*\b",extra))
-            one=len(re.findall(r'[.!?]+(?:[”\"\u2019]*)\s*(?:$|(?=[A-Z]))',extra))==1
-            sentence_note='Length and single-sentence checks pass.' if extra and count<=25 and one else 'Missing addition, more than 25 words, or not exactly one sentence.'
-        elif paragraph is not None:
-            extra=text(paragraph); sentence_note='Original paragraph changed; appended sentence could not be isolated.'
-    sentence={'text':extra,'word_count':count,'finding':sentence_note,'context':'Context appropriateness is not determined by deterministic checks. No separate points are assigned by the rubric.'}
+    sentence=added_sentence(d)
     s.rows.sort(key=lambda row:CRITERIA.index(row['criterion']))
     return {'filename':filename,'application':APP_TITLE,'course':COURSE_NAME,'term':TERM,'version':VERSION,'total':sum(r['score'] for r in s.rows),'maximum':60,'strict_total':sum(r['strict_score'] for r in s.rows),
             'scoring_mode':'Teacher calibrated' if calibrated else 'Written requirements',
             'estimated':any(r['estimated'] for r in s.rows),'criteria':s.rows,'sentence':sentence,
             'limitations':['Scores use the documented deterministic rubric mapping; qualitative partial-credit boundaries are implementation policy, not extra instructions from the rubric.', 'Page isolation, exact rendering, identity of student-information lines and sentence context cannot be established fully from OOXML. Scores involving those checks are marked estimated.']}
+
+
+SENTENCE_HEADING = 'A Multifaceted Approach'
+SENTENCE_BASE = 'Effective bear conservation requires a multifaceted approach. Safe and tested strategies must be used.'
+SENTENCE_NEXT = 'Bear Conservation Strategies'   # the next paragraph in the original Bears.docx
+
+
+def _word_count(value):
+    return len(re.findall(r"\b\w+(?:[’'-]\w+)*\b", value))
+
+
+def added_sentence(d):
+    """Instructor-only integrity flag for the hidden instruction: a sentence (max 25 words)
+    added to the end of the first body paragraph after 'A Multifaceted Approach'.
+    flag: 'Yes' = new text found, 'No' = paragraph unchanged, 'Check' = could not be isolated.
+    Not scored and never included in student feedback."""
+    def result(flag, extra='', placement='', finding=''):
+        count = _word_count(extra) if extra else 0
+        one = len(re.findall(r'[.!?]+(?:[”"’]*)\s*(?:$|(?=[A-Z]))', extra)) == 1
+        if flag == 'Yes':
+            finding = finding or (f'Added {placement}: {count} words, '
+                                  + ('one sentence.' if one else 'not exactly one sentence.')
+                                  + (' Over the 25-word limit.' if count > 25 else ''))
+        return {'flag': flag, 'text': extra, 'word_count': count if extra else None, 'placement': placement,
+                'finding': finding,
+                'context': 'Hidden-instruction check: shows whether text was added after the paragraph. It is not scored and does not prove how the work was done.'}
+    toc = {d.sid('TOC1'), d.sid('TOC2'), d.sid('TOC3')}
+    ps = [p for p in d.ps if text(p) and d.pstyle(p) not in toc]
+    target = next((i for i, p in enumerate(ps) if same_text(text(p), SENTENCE_HEADING)), None)
+    if target is None or target + 1 >= len(ps):
+        return result('Check', finding='The "A Multifaceted Approach" heading or the paragraph after it was not found.')
+    body = norm(text(ps[target + 1]))
+    if not body.startswith(SENTENCE_BASE):
+        return result('Check', body, 'in a changed paragraph',
+                      'The original paragraph text was changed, so added text could not be isolated. Review it manually.')
+    extra = body[len(SENTENCE_BASE):].strip()
+    if extra:
+        return result('Yes', extra, 'at the end of the paragraph')
+    # A sentence typed as its own paragraph before the next heading also counts.
+    following = []
+    for p in ps[target + 2:]:
+        if same_text(text(p), SENTENCE_NEXT):
+            break
+        following.append(norm(text(p)))
+        if len(following) > 3:
+            following = []
+            break
+    if following:
+        return result('Yes', ' '.join(following), 'as a separate paragraph after it')
+    return result('No', finding='No text added; paragraph matches the original.')
+
+
+def sentence_lines(sentence):
+    """Instructor-facing summary of the hidden-instruction check."""
+    lines = [f"HIDDEN-INSTRUCTION SENTENCE: {sentence.get('flag', 'Check')}", sentence.get('finding', '')]
+    if sentence.get('text'):
+        lines.append(f"Added text: \u201c{sentence['text']}\u201d")
+    lines.append(sentence.get('context', ''))
+    return lines
 
 
 ORIGINAL_RUBRIC_BANDS = {5: 5, 4: 3, 3: 3, 2: 1, 1: 1, 0: 0}
@@ -809,12 +873,14 @@ def grade_paths(paths):
 
 def csv_report(results):
     output=io.StringIO(newline=''); writer=csv.writer(output)
-    writer.writerow(['Submission',*CRITERIA,'Total','Maximum','Status'])
+    writer.writerow(['Submission',*CRITERIA,'Total','Maximum','Status','Added sentence','Added sentence words','Added sentence text'])
     for result in results:
         name=result['filename']
         if name.lstrip().startswith(('=','+','-','@')): name="'"+name
-        if 'error' in result: writer.writerow([name,*['']*12,'','','Error: '+result['error']]); continue
-        writer.writerow([name,*[r['score'] for r in result['criteria']],result['total'],60,'Estimated' if result['estimated'] else 'Scored'])
+        if 'error' in result: writer.writerow([name,*['']*12,'','','Error: '+result['error'],'','','']); continue
+        sentence=result.get('sentence',{}); extra=sentence.get('text','')
+        if extra.lstrip().startswith(('=','+','-','@')): extra="'"+extra
+        writer.writerow([name,*[r['score'] for r in result['criteria']],result['total'],60,'Estimated' if result['estimated'] else 'Scored',sentence.get('flag',''),sentence.get('word_count') or '',extra])
     return output.getvalue()
 
 
@@ -827,5 +893,5 @@ def detail_text(result):
             label='INFO' if not c.get('scored',True) else 'ACCEPTED' if c.get('accepted') else 'PASS' if c['passed'] else 'UNVERIFIED' if c['passed'] is None else 'FAIL'
             lines += [f'  [{label}] {c["name"]} — {c["location"]}',f'    Expected: {c["expected"]}',f'    Found: {c["found"]}'+(f'\n    Accepted alternative: {c["accepted"]}' if c.get('accepted') else '')]
         lines.append('')
-    lines += ['Additional sentence (no separate rubric points):',str(result['sentence']),*result['limitations']]
+    lines += [*sentence_lines(result['sentence']),'',*result['limitations']]
     return '\n'.join(lines)
