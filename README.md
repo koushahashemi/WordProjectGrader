@@ -25,13 +25,13 @@ artifact. The installer and source build scripts also work from this branch.
 
 ---
 
-# BCIT Word Project Grader 3.1.0
+# BCIT Word Project Grader — Original Rubric Version 2
 
 An instructor grading tool for **BCIT BSYS 1000 — Word Project, Fall 2026**, using the Together for Bears assignment. Grade Word Project submissions individually or in batches, review rubric scores, and export feedback. Batch results show all 12 rubric criteria and a total out of 60. No browser, server, account, API key, or AI service is required.
 
 ## Windows executable
 
-Open **Releases**, download **BearsGrader.exe** from version 3.1.0, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
+Open the [version 2 release](https://github.com/koushahashemi/WordProjectGrader/releases/tag/v2.0.0-original-rubric), download **BearsGrader.exe**, and double-click it. Replace the previous executable. Python does not need to be installed. Windows may show a reputation warning for an unsigned application; verify the download came from this repository.
 
 GitHub Actions builds and tests the executable on Windows, including an actual desktop self-test and the embedded assignment assets, before publishing tagged releases. If a build fails, no new executable is published; inspect the Actions tab.
 
@@ -70,7 +70,7 @@ The default feedback gives one overall conclusion and identifies the weak areas.
 
 ## Scoring
 
-- **General criteria:** start at 5 and deduct one mark per distinct failed item/property, down to 0. One simple error gives **4/5**, not an automatic jump to 3. Missing primary features, such as no TOC or no references section, can still receive 0. Citation source fields and APA style use this same distinct-error rule; the old 5/3/1/0-only bands are no longer used.
+- **General criteria:** the detailed assessment starts at 5 and deducts one mark per distinct failed item/property, down to 0. Final rubric marks then use **5→5, 4→3, 3→3, 2→1, 1→1, 0→0**. Missing primary features, such as no TOC or no references section, can still receive 0. Criteria with weighted evidence groups keep their existing detailed assessment before this same band conversion.
 - **Headings:** five equal one-mark groups as listed above. Repeating a wrong heading assignment does not multiply the one-mark application-group deduction. Applying Title style to the cover is evaluated only under Title Page.
 - **Table of Contents:** automatic Word TOC with saved entries (2), title/formatting (1), entry typography (1), structure/leader dots (1). Repeated wrong fonts/sizes across TOC1–3 affect only typography. A manually typed contents list can retain the other three marks. Unverified pagination does not deduct marks.
 - **In-text citations:** Word citation presence (2), APA 6 style (1), first-source book details (1), first-source author and source links (1). An empty source placeholder loses source credit while existing citations and a correct APA setting retain credit. No recognizable citation fields still receives 0.
